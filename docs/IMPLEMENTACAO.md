@@ -317,7 +317,7 @@ Stack: Next.js (App Router) + TypeScript + Tailwind, `@solana/wallet-adapter-rea
 3. **Visão Empresa (`/employer`):** registrar empresa, depositar USDC, tabela de funcionários, adicionar/editar (saldo, limite por refeição, teto diário, janela), revogar, saldo do cofre (depositado vs. alocado).
 4. **Visão Funcionário (`/employee` e `/pay`), mobile first:** saldo, quanto ainda pode gastar hoje, botão "Scan to pay", lista de restaurantes, tela de confirmação, recibo com link para o Solana Explorer (`https://explorer.solana.com/tx/<sig>?cluster=devnet`).
 5. **Visão Restaurante (`/merchant`):** QR fixo do restaurante, vendas do dia em tempo real (`onPayment`), total recebido e taxa paga.
-6. **Landing (`/`):** o que é o Tabbit, botão para as 3 visões, formulário de lista de espera (pode ser Tally ou Google Forms embutido, grátis).
+6. **Landing (`/`):** o que é o Tabbit, botão para as 3 visões, formulário de lista de espera (pode ser Tally ou Google Forms embutido, grátis). Feito no PR #3: hero animado, simulador de regras, calculadora de economia e cards das demos; a lista de espera entra pelo `NEXT_PUBLIC_WAITLIST_URL`.
 7. Seletor de moeda de exibição (R$, €, US$) em `lib/currency.ts`, com cotação fixa configurável para a demo.
 8. Mensagens amigáveis para cada `TabbitErrorCode`.
 

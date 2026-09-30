@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "types": ["mocha", "chai"],
+    "types": ["mocha", "chai", "node"],
     "lib": ["es2020", "dom"],
     "module": "commonjs",
     "target": "es2020",
@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "strict": true
   },
-  "include": ["tests/**/*.ts", "sdk/src/**/*.ts"]
+  "include": ["tests/**/*.ts", "scripts/**/*.ts", "sdk/src/**/*.ts"]
 }

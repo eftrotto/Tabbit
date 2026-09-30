@@ -12,7 +12,7 @@ tabbit = "2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF"
 tabbit = "2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

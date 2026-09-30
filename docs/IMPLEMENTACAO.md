@@ -2,15 +2,16 @@
 
 > Cole este arquivo inteiro no Claude Code (ou leia com calma) antes de começar. Ele tem o contexto do projeto, a divisão de trabalho e o **contrato de interface** que as duas metades precisam respeitar para juntar sem conflito.
 
-## Status (30/09)
+## Status (30/09, noite)
 
 - [x] Repositório com a estrutura de pastas, `.gitignore`, `CODEOWNERS`, workspaces npm
-- [x] **Contrato `sdk/src/types.ts` pronto** (seção 4.6). Não precisa mais criar no dia 1
-- [x] SDK com `constants.ts`, `pda.ts`, `wallet.ts` e `client.ts` (este ainda é stub, lança erro)
-- [x] Programa Anchor compilando: contas (`state.rs`), erros, evento e a instrução `initialize` como exemplo; IDL já copiada para `sdk/src/idl/tabbit.json`
-- [x] Teste de exemplo em `tests/tabbit.ts`
-- [ ] Dev A: as outras 9 instruções, testes, deploy, SDK real (seção 5)
-- [ ] Dev B: criar o app em `app/` e as 3 visões (seção 6)
+- [x] **Contrato `sdk/src/types.ts` pronto** (seção 4.6)
+- [x] **Programa completo**: as 10 instruções da seção 4.3 (`programs/tabbit/src/instructions/`)
+- [x] **20 testes passando** (`anchor test`): 19 de regras do programa + 1 de ponta a ponta do SDK
+- [x] **SDK real** (`createTabbitClient`) implementando toda a interface, com erros tipados
+- [x] Script de dados de demo (`npm run seed`) e exportador de chave para o Phantom (`npm run key:export`)
+- [ ] Dev A: **deploy na devnet** (seção 5.1) e fee payer (extra)
+- [ ] Dev B: criar o app em `app/` e as 3 visões (seção 6). Pode usar o SDK real direto em localnet ou devnet; o mock continua útil para trabalhar offline
 
 ## Setup (os dois)
 
@@ -272,15 +273,36 @@ Conteúdo do QR do restaurante: `https://<app>/pay?merchant=<walletBase58>&amoun
 
 ## 5. Tarefas do Dev A — On-chain + SDK
 
-Ambiente: Rust, Solana CLI (Agave 2.x), Anchor 0.31+, Node 20+. Carteira de dev com SOL de devnet (`solana airdrop 2` ou https://faucet.solana.com). Se a instalação local travar, dá para compilar e publicar pelo **Solana Playground** (https://beta.solpg.io), no navegador.
+Ambiente: Rust, Solana CLI (Agave 2.3.x), Anchor 0.31.1, Node 20+ (ver "Setup" no topo).
 
-1. ~~Criar o repositório, workspaces, `CODEOWNERS` e `types.ts`~~ **feito**.
-2. Programa: `state.rs`, `errors.rs`, `events.rs` e `initialize` já existem. Faltam as outras 9 instruções da seção 4.3, cada uma em `programs/tabbit/src/instructions/<nome>.rs`.
-3. Testes cobrindo: fluxo feliz; `pay` acima de `maxPerMeal`; acima de `dailyCap`; reset do teto no dia seguinte; fora da janela (com fuso -180); merchant inativo; funcionário revogado; pausa; `upsertEmployee` que passa do depositado; taxa indo para a tesouraria.
-4. Deploy na devnet. Anotar `PROGRAM_ID` em `sdk/src/constants.ts` e no README.
-5. `scripts/seed-devnet.ts`: cria Config (feeBps 80), 1 empresa demo, 3 restaurantes demo, 2 funcionários com saldo. Salvar as chaves de demo **fora do git**.
-6. SDK real: `pda.ts`, `client.ts` implementando `TabbitClient`, conversão dos erros Anchor para `TabbitError`, `listPayments` lendo eventos `PaymentMade` das transações, `onPayment` via `connection.onLogs`.
-7. Extra se sobrar tempo: fee payer do app (funcionário sem SOL).
+1. ~~Repositório, workspaces, `CODEOWNERS`, `types.ts`~~ feito.
+2. ~~Programa com as 10 instruções~~ feito.
+3. ~~Testes~~ feito: fluxo feliz, limite por refeição, teto diário, janela de horário (fuso -180), restaurante não credenciado e descredenciado, funcionário revogado, pausa, alocação acima do depositado, taxa para a tesouraria, carteira de outro funcionário, permissões. A virada do dia local é testada em Rust (`programs/tabbit/src/time.rs`).
+4. **Deploy na devnet** (seção 5.1).
+5. ~~`scripts/seed-devnet.ts`~~ feito. Rode depois do deploy.
+6. ~~SDK real~~ feito (`sdk/src/client.ts`).
+7. Extra: fee payer do app (funcionário sem SOL).
+
+### 5.1 Deploy na devnet
+
+```bash
+solana config set --url devnet
+solana-keygen new                       # se ainda não tiver ~/.config/solana/id.json
+solana airdrop 2 && solana airdrop 2    # ou https://faucet.solana.com (login GitHub, até 5 SOL)
+```
+
+O deploy custa cerca de 3 SOL de teste (programa de ~380 KB).
+
+Para manter o endereço que já está no código (`2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF`), copie o arquivo `tabbit-keypair.json` que está na pasta do projeto no Claude para `target/deploy/tabbit-keypair.json`. Ele **nunca** vai para o git. Sem ele, rode `anchor keys sync` e depois `npm run build:program` para atualizar lib.rs, Anchor.toml e a IDL do SDK, e troque `PROGRAM_ID` em `sdk/src/constants.ts`.
+
+```bash
+anchor build
+anchor deploy --provider.cluster devnet
+npm run seed                            # Config, empresa, 3 restaurantes, 2 funcionários
+npm run key:export -- keys/employee-joao.json   # chave para importar no Phantom
+```
+
+`npm run seed` usa por padrão um token de teste próprio (emissão ilimitada). Para usar o USDC da Circle: `MINT=usdc npm run seed`, com a carteira da empresa abastecida em https://faucet.circle.com.
 
 **Pronto quando:** `anchor test` verde, programa na devnet, `seed-devnet` roda do zero, e o B troca `NEXT_PUBLIC_USE_MOCK=false` e tudo funciona.
 

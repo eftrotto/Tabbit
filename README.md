@@ -1,4 +1,4 @@
-<div align="center">
+<div align="start">
 
 # Tabbit
 
@@ -38,10 +38,6 @@ Restaurant wallet ◀──── instant USDC settlement (−0.5% fee) ─┘
 3. **The contract enforces PAT rules**: registered restaurants only, allowed meal hours (Brasília time), per-meal and daily limits.
 4. **Restaurant** receives USDC in its wallet in seconds.
 5. **Everyone can audit** every transaction on BaseScan.
-
-## Architecture
-
-#preencher 
 
 ### Smart contract: `MealVoucher.sol`
 
@@ -88,7 +84,7 @@ npm run dev
 
 ## Roadmap
 
-- [x] Concept and architecture
+- [ ] Concept and architecture
 - [ ] `MealVoucher.sol` + full test suite
 - [ ] Base Sepolia deployment
 - [ ] Employer, worker and restaurant apps
@@ -98,9 +94,7 @@ npm run dev
 - [ ] Integration with licensed PAT operators and new entrants after interoperability
 
 ## Team
-
-Built by a Brazilian team for the Colosseum Crypto World's Fair.
-
-## License
-
-MIT
+Bernado Nemrovsky
+Enzo Trotto
+Gabriel Firmamento
+Guilherme Firmeza

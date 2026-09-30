@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { Card, DemoBanner, ErrorText, Money } from "@/components/ui";
+import { LiveMark } from "@/components/landing/live-mark";
 import { formatWindow } from "@/lib/time";
 import { friendlyError } from "@/lib/errors";
 import { explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
@@ -40,11 +41,14 @@ export default function EmployeePage() {
     <div className="mx-auto max-w-md space-y-5">
       {banner}
 
-      <section className={`rounded-3xl p-6 text-paper ${e.active ? "bg-ink" : "bg-ink/60"}`}>
+      <section className={`relative overflow-hidden rounded-3xl p-6 text-paper shadow-[0_24px_60px_-24px] shadow-ink/60 ${e.active ? "bg-night" : "bg-ink/60"}`}>
+        <div aria-hidden className="animate-drift pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-brand/30 blur-3xl" />
+        <div aria-hidden className="bg-grid pointer-events-none absolute inset-0" />
+        {e.active && <LiveMark id="balance-mark" className="pointer-events-none absolute -bottom-7 right-5 h-24 w-auto rotate-[-6deg]" />}
         {e.active ? (
-          <>
+          <div className="relative">
             <p className="text-sm opacity-70">Meal balance</p>
-            <p className="mt-1 text-4xl font-bold tracking-tight text-brand"><Money base={e.balance} /></p>
+            <p className="mt-1 font-display text-4xl font-black tracking-tight text-brand sm:text-5xl"><Money base={e.balance} /></p>
             <div className="mt-5 rounded-2xl bg-paper/10 p-4">
               <p className="text-sm opacity-70">Available today</p>
               <p className="text-2xl font-semibold"><Money base={availableToday(e)} /></p>
@@ -59,7 +63,7 @@ export default function EmployeePage() {
               <div><dt className="opacity-70">Per meal</dt><dd className="font-semibold"><Money base={e.maxPerMeal} /></dd></div>
               <div><dt className="opacity-70">Meal hours</dt><dd className="font-semibold">{formatWindow(e.windowStartMin, e.windowEndMin)}</dd></div>
             </dl>
-          </>
+          </div>
         ) : (
           <>
             <p className="text-xl font-semibold">Benefit inactive</p>
@@ -68,7 +72,12 @@ export default function EmployeePage() {
         )}
       </section>
 
-      <Link href="/pay?scan=1" className="btn-primary w-full !py-4 text-lg">Scan to pay</Link>
+      <Link href="/pay?scan=1" className="btn-primary w-full !py-4 text-lg">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M4 12h16" />
+        </svg>
+        Scan to pay
+      </Link>
 
       <Card title="Restaurants">
         {merchants.filter((m) => m.active).length === 0 && <p className="text-sm opacity-60">No restaurants yet.</p>}

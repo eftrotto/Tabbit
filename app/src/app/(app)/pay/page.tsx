@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PublicKey } from "@solana/web3.js";
 import type { MerchantAccount } from "@tabbit/sdk";
-import { Card, DemoBanner, ErrorText, Money, shortKey } from "@/components/ui";
+import { Card, DemoBanner, ErrorText, Money, ResultIcon, shortKey } from "@/components/ui";
 import { parseUsdc } from "@/lib/currency";
 import { friendlyError } from "@/lib/errors";
 import { explorerTxUrl, useLoad, useTabbit, type TabbitContext } from "@/lib/tabbit";
@@ -73,7 +73,7 @@ function ScanStep({ tabbit, invalid }: { tabbit: TabbitContext; invalid: boolean
     <div className="space-y-5">
       <h1 className="text-2xl font-bold">Pay a restaurant</h1>
       {!camOff && (
-        <div className="overflow-hidden rounded-3xl border-4 border-ink bg-ink">
+        <div className="overflow-hidden rounded-3xl border-4 border-ink bg-ink shadow-[0_20px_50px_-20px] shadow-brand/60">
           <Scanner
             onScan={onScan}
             onError={() => setCamOff(true)}
@@ -154,9 +154,9 @@ function PayFlow({ tabbit, merchant, initialAmount }: { tabbit: TabbitContext; m
   if (step === "done" && receipt && amount)
     return (
       <Card className="text-center">
-        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-brand text-3xl" aria-hidden>✓</div>
+        <ResultIcon ok />
         <h1 className="text-2xl font-bold">Payment sent</h1>
-        <p className="mt-1 text-3xl font-bold"><Money base={amount} /></p>
+        <p className="mt-1 font-display text-4xl font-black"><Money base={amount} /></p>
         <dl className="mt-4 space-y-1 text-sm">
           <div className="flex justify-between"><dt className="opacity-60">Paid to</dt><dd className="font-medium">{m.name}</dd></div>
           <div className="flex justify-between"><dt className="opacity-60">When</dt><dd>{fmtTime(receipt.ts)}</dd></div>
@@ -173,7 +173,7 @@ function PayFlow({ tabbit, merchant, initialAmount }: { tabbit: TabbitContext; m
   if (step === "blocked")
     return (
       <div role="alert" className="rounded-3xl border-2 border-red-500 bg-red-50 p-6 text-center">
-        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-3xl text-white" aria-hidden>✕</div>
+        <ResultIcon ok={false} />
         <h1 className="text-2xl font-bold text-red-800">Payment blocked</h1>
         <p className="mt-2 text-lg font-semibold text-red-700">{failure}</p>
         <p className="mt-1 text-sm text-red-700/80">The rule was enforced by the program. Nothing was charged.</p>

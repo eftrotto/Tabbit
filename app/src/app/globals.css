@@ -31,33 +31,48 @@ body {
 }
 
 @utility card {
-  @apply rounded-2xl border border-ink/10 bg-white p-5 shadow-sm;
+  @apply rounded-3xl border border-ink/[0.07] bg-white/85 p-6 shadow-[0_1px_2px_rgba(11,43,43,0.04),0_12px_32px_-12px_rgba(11,43,43,0.12)] backdrop-blur-xl;
 }
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 font-semibold transition duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
 }
 @utility btn-primary {
-  @apply btn bg-brand text-ink hover:brightness-95;
+  @apply btn bg-brand text-ink shadow-[0_8px_24px_-10px] shadow-brand hover:brightness-105 hover:shadow-[0_10px_28px_-8px] hover:shadow-brand;
 }
 @utility btn-secondary {
-  @apply btn border border-ink/20 bg-white hover:bg-ink/5;
+  @apply btn border border-ink/15 bg-white hover:border-ink/30 hover:bg-ink/[0.03];
 }
 @utility btn-danger {
   @apply btn border border-red-300 bg-white text-red-700 hover:bg-red-50;
 }
 @utility input {
-  @apply w-full rounded-xl border border-ink/20 bg-white px-3 py-2 outline-none focus:border-ink focus:ring-2 focus:ring-brand/50;
+  @apply w-full rounded-2xl border border-ink/15 bg-white px-3.5 py-2.5 outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/20;
 }
 @utility label {
-  @apply mb-1 block text-sm font-medium;
+  @apply mb-1.5 block text-sm font-semibold;
+}
+
+/* Títulos na fonte arredondada da marca */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
 }
 
 /* Botão da carteira com as cores da marca */
 .wallet-adapter-button-trigger {
   background-color: var(--color-ink) !important;
-  border-radius: 0.75rem !important;
+  border-radius: 1rem !important;
   height: 2.5rem !important;
+  font-family: var(--font-sans) !important;
   font-size: 0.875rem !important;
+  transition: box-shadow 0.2s, transform 0.2s !important;
+}
+.wallet-adapter-button-trigger:hover {
+  box-shadow: 0 0 0 3px rgb(30 232 138 / 0.35);
 }
 
 /* Landing */

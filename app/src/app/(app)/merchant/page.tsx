@@ -49,12 +49,13 @@ function QrCard({ wallet, name }: { wallet: string; name: string }) {
 
   return (
     <Card title="Your payment QR">
-      <div className="mx-auto max-w-xs rounded-3xl bg-ink p-4 text-center">
-        <div className="rounded-2xl bg-white p-3">
+      <div className="relative mx-auto max-w-xs overflow-hidden rounded-3xl bg-night p-4 text-center shadow-[0_24px_60px_-20px] shadow-brand/50">
+        <div aria-hidden className="animate-drift pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-brand/30 blur-3xl" />
+        <div className="relative rounded-2xl bg-white p-3">
           {origin && <QRCodeSVG value={url} size={256} level="M" className="h-auto w-full" />}
         </div>
-        <p className="mt-3 font-semibold text-brand">{name}</p>
-        <p className="text-xs text-paper/70">Scan with Tabbit to pay</p>
+        <p className="relative mt-3 font-display text-lg font-black text-brand">{name}</p>
+        <p className="relative text-xs text-paper/70">Scan with Tabbit to pay</p>
       </div>
       <div className="mt-5">
         <label className="label" htmlFor="charge">Charge a specific amount (optional, USDC)</label>

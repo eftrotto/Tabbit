@@ -1,0 +1,230 @@
+{
+  "address": "2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF",
+  "metadata": {
+    "name": "tabbit",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Tabbit: on-chain meal benefits with programmable rules"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "PaymentMade",
+      "discriminator": [
+        227,
+        251,
+        123,
+        16,
+        133,
+        220,
+        83,
+        242
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Paused",
+      "msg": "Payments are paused"
+    },
+    {
+      "code": 6001,
+      "name": "Unauthorized",
+      "msg": "Signer is not allowed to do this"
+    },
+    {
+      "code": 6002,
+      "name": "EmployeeInactive",
+      "msg": "Employee is not active"
+    },
+    {
+      "code": 6003,
+      "name": "MerchantInactive",
+      "msg": "Merchant is not active"
+    },
+    {
+      "code": 6004,
+      "name": "ExceedsMaxPerMeal",
+      "msg": "Amount exceeds the per-meal limit"
+    },
+    {
+      "code": 6005,
+      "name": "ExceedsDailyCap",
+      "msg": "Amount exceeds the daily limit"
+    },
+    {
+      "code": 6006,
+      "name": "InsufficientBalance",
+      "msg": "Insufficient balance"
+    },
+    {
+      "code": 6007,
+      "name": "OutsideTimeWindow",
+      "msg": "Outside the allowed time window"
+    },
+    {
+      "code": 6008,
+      "name": "OverAllocated",
+      "msg": "Allocated balance would exceed deposited funds"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidAmount",
+      "msg": "Invalid amount"
+    },
+    {
+      "code": 6010,
+      "name": "NameTooLong",
+      "msg": "Name is too long"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidWindow",
+      "msg": "Invalid time window"
+    }
+  ],
+  "types": [
+    {
+      "name": "Config",
+      "docs": [
+        "Seeds: [\"config\"]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PaymentMade",
+      "docs": [
+        "Emitido a cada `pay`. O SDK lê este evento para montar o histórico."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "employer",
+            "type": "pubkey"
+          },
+          {
+            "name": "employee",
+            "docs": [
+              "wallet do funcionário"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "merchant",
+            "docs": [
+              "wallet do restaurante"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

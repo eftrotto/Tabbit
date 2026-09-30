@@ -2,8 +2,8 @@
 
 # Tabbit
 
-**On-chain meal benefits for Brazil.**
-Employers fund in USDC, workers pay by QR, restaurants get paid in seconds. Built on Base.
+**Smart spending, verified.**
+On-chain meal benefits. Employers fund in USDC, workers pay by QR, restaurants get paid in seconds. Built on Solana.
 
 *Built for the [Colosseum Crypto World's Fair](https://colosseum.com/worldsfair) hackathon (Sep 14 – Oct 12, 2026).*
 
@@ -13,88 +13,95 @@ Employers fund in USDC, workers pay by QR, restaurants get paid in seconds. Buil
 
 ## The problem
 
-Brazil's meal-voucher program (PAT) covers **22M+ workers** at **327k companies**. Money flows through a handful of closed operator networks:
+Brazil's meal-voucher program (PAT) covers **22M+ workers** at **327k companies** and moves R$150–200B a year. Money flows through a handful of closed operator networks:
 
-- Restaurants pay up to **3.6%** on every sale (the cap set by the Dec/2025 decree; before it, fees reached 15%).
+- Restaurants pay up to **3.6%** on every sale (the cap set by Decree 12.712/2025; before it, the average was 6–7%).
 - Restaurants wait up to **15 days** to receive their money, a heavy cash-flow burden for small businesses.
-- Rules like "food only" and "lunch hours" are enforced by opaque, centralized systems nobody can audit.
+- Spending rules are enforced by opaque, centralized systems nobody can audit.
 
-The same decree mandates **interoperability** (rolling out through Nov/2026) and **worker portability**, opening the market to new payment rails for the first time.
+The same decree mandates **open, interoperable networks** by Nov/2026, opening the market to new payment rails for the first time. Meal benefits exist in many countries (Italy's *buoni pasto*, France's *tickets-restaurant*, Korea's meal vouchers); Brazil is our first market.
 
 ### How it works
 
 ```
-Employer ──deposit USDC──▶ Tabbit contract ──allocate──▶ Worker balance
-                                                            │
-                                     scan restaurant QR ────┘
-                                                            ▼
-                         contract checks PAT rules (restaurant, hours, limits)
-                                                            ▼
-Restaurant wallet ◀──── instant USDC settlement (−0.5% fee) ─┘
+Employer ──deposit USDC──▶ Employer vault (PDA) ──allocate──▶ Worker balance
+                                                                  │
+                                           scan restaurant QR ────┘
+                                                                  ▼
+                 program checks rules (registered merchant, per-meal & daily limits, time window)
+                                                                  ▼
+Restaurant wallet ◀──── instant USDC settlement (−0.8% fee) ───────┘
 ```
 
-1. **Employer** deposits USDC and allocates monthly meal balances to employees.
-2. **Worker** opens the app, scans the restaurant's QR code and pays. No wallet setup and no gas, thanks to Coinbase Smart Wallet and a paymaster.
-3. **The contract enforces PAT rules**: registered restaurants only, allowed meal hours (Brasília time), per-meal and daily limits.
+1. **Employer** deposits USDC into its on-chain vault and sets each worker's balance and rules.
+2. **Worker** opens the app, scans the restaurant's QR code and pays.
+3. **The program enforces the rules**: registered merchants only, per-meal and daily limits, optional time window in the employer's timezone.
 4. **Restaurant** receives USDC in its wallet in seconds.
-5. **Everyone can audit** every transaction on BaseScan.
+5. **Everyone can audit** every transaction on Solana Explorer.
 
-### Smart contract: `MealVoucher.sol`
+A worker can never send benefit money to an arbitrary wallet: the only possible destination is a registered merchant.
 
-| Function | Role | Description |
+## Architecture
+
+| Layer | Stack | Folder |
 |---|---|---|
-| `deposit(amount)` | Employer | Deposit USDC into the contract |
-| `allocate(employee, amount)` | Employer | Credit a worker's meal balance |
-| `revoke(employee)` | Employer | Return an unused balance (e.g. termination) |
-| `registerRestaurant(addr, name)` | Admin | Add a restaurant to the network |
-| `pay(restaurant, amount)` | Worker | Pay a meal; enforces all PAT rules |
+| On-chain program | Rust + Anchor 0.31 | `programs/tabbit` |
+| Tests | Anchor + Mocha | `tests/` |
+| Client SDK | TypeScript (`@tabbit/sdk`) | `sdk/` |
+| Web app | Next.js + Tailwind + Solana Wallet Adapter | `app/` |
 
-Every state change emits an event, so the frontend builds full history straight from the chain.
+### Program: `tabbit`
 
-## App screens
-
-- **Employer dashboard**: fund the account, allocate balances, manage limits and restaurants.
-- **Worker app** (mobile-first): balance in BRL, scan to pay, payment history.
-- **Restaurant view**: generate a payment QR, see payments land in real time.
+| Instruction | Signer | Description |
+|---|---|---|
+| `initialize(fee_bps, treasury)` | Platform | Create global config |
+| `register_employer(name, tz_offset_minutes)` | Employer | Create employer account and USDC vault |
+| `deposit(amount)` | Employer | Deposit USDC into the vault |
+| `upsert_employee(wallet, balance, max_per_meal, daily_cap, window)` | Employer | Create/update a worker's balance and rules |
+| `revoke_employee()` | Employer | Return an unused balance (e.g. termination) |
+| `withdraw_unallocated(amount)` | Employer | Withdraw unallocated funds |
+| `register_merchant(wallet, name, category)` | Platform | Add a restaurant to the network |
+| `set_merchant_active(active)` / `set_paused(paused)` | Platform | Operations and emergency pause |
+| `pay(amount)` | Worker | Pay a meal; enforces all rules and emits `PaymentMade` |
 
 ## Getting started
 
-> ⚠️ Work in progress. Commands will be finalized as the code lands.
+> ⚠️ Work in progress.
 
 ```bash
-# Contracts
-cd contracts
-forge install
-forge test
-
-# Deploy to Base Sepolia (set PRIVATE_KEY and RPC_URL in .env; never commit it)
-forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast --verify
-
-# Frontend
-cd ../app
+git clone https://github.com/eftrotto/tabbit.git && cd tabbit
 npm install
+
+# Program (needs Solana CLI 2.3.x + Anchor 0.31.1)
+anchor build
+anchor test
+
+# Web app
 npm run dev
 ```
 
+Team docs (Portuguese): [`docs/IMPLEMENTACAO.md`](docs/IMPLEMENTACAO.md).
+
 ## Deployments
 
-| Network | Contract | Address |
+| Network | Program | Address |
 |---|---|---|
-| Base Sepolia | MealVoucher | _TBD_ |
+| Solana devnet | tabbit | _TBD_ |
 
 ## Roadmap
 
-- [ ] Concept and architecture
-- [ ] `MealVoucher.sol` + full test suite
-- [ ] Base Sepolia deployment
+- [x] Concept and architecture
+- [ ] `tabbit` program + full test suite
+- [ ] Devnet deployment
 - [ ] Employer, worker and restaurant apps
-- [ ] Gasless payments with Smart Wallet + paymaster
+- [ ] Gasless payments (app as fee payer)
 - [ ] Pilot with real restaurants in São Paulo
-- [ ] USDC → Pix off-ramp for restaurants (or BRL stablecoin)
-- [ ] Integration with licensed PAT operators and new entrants after interoperability
+- [ ] Local-currency stablecoins (BRL) and off-ramp for restaurants
+- [ ] Integration with licensed PAT operators after interoperability
 
 ## Team
-Bernado Nemrovsky
-Enzo Trotto
-Gabriel Firmamento
-Guilherme Firmeza
+
+- Bernado Nemrovsky
+- Enzo Trotto
+- Gabriel Firmamento
+- Guilherme Firmeza

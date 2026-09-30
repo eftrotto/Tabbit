@@ -1,0 +1,7 @@
+# Substitua @DEV_A e @DEV_B pelos usuários do GitHub de cada um.
+/programs/          @DEV_A
+/tests/             @DEV_A
+/scripts/           @DEV_A
+/sdk/               @DEV_A
+/app/               @DEV_B
+/sdk/src/types.ts   @DEV_A @DEV_B

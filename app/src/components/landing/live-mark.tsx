@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion, useMotionValue, useSpring } from "motion/react";
 import { MarkEyes, TabbitMark } from "@/components/brand";
 
@@ -7,13 +7,21 @@ import { MarkEyes, TabbitMark } from "@/components/brand";
 export function LiveMark({ className, id = "live-mark" }: { className?: string; id?: string }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  const sx = useSpring(x, { stiffness: 120, damping: 14 });
-  const sy = useSpring(y, { stiffness: 120, damping: 14 });
+  const ref = useRef<SVGSVGElement>(null);
+  const sx = useSpring(x, { stiffness: 380, damping: 24 });
+  const sy = useSpring(y, { stiffness: 380, damping: 24 });
 
   useEffect(() => {
+    // Olha na direção do cursor a partir do próprio mascote, com alcance bem visível.
     const onMove = (e: PointerEvent) => {
-      x.set((e.clientX / window.innerWidth - 0.5) * 44);
-      y.set((e.clientY / window.innerHeight - 0.5) * 36);
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const dx = e.clientX - (r.left + r.width * 0.68);
+      const dy = e.clientY - (r.top + r.height * 0.62);
+      const k = Math.min(1, Math.hypot(dx, dy) / 260);
+      const a = Math.atan2(dy, dx);
+      x.set(Math.cos(a) * k * 62);
+      y.set(Math.sin(a) * k * 48);
     };
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
@@ -21,6 +29,7 @@ export function LiveMark({ className, id = "live-mark" }: { className?: string; 
 
   return (
     <TabbitMark
+      ref={ref}
       id={id}
       className={className}
       eyes={

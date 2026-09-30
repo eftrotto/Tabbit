@@ -130,7 +130,10 @@ export function Hero() {
         <div className="relative mx-auto mt-32 flex w-full max-w-md justify-center sm:mt-44 lg:mt-0 lg:justify-end">
           <motion.div style={{ y: markY, rotate: markRotate }} className="absolute -top-40 right-2 w-40 sm:-top-52 sm:right-0 sm:w-52 lg:-top-[10.75rem] lg:w-44">
             <motion.div initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9, type: "spring", stiffness: 80, damping: 12 }}>
-              <motion.div animate={{ y: [0, -12, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}>
+              <motion.div
+                animate={{ y: [0, 0, -34, -34, 0], rotate: [0, 0, -5, -5, 0] }}
+                transition={{ duration: 4.5, times: [0, 0.45, 0.55, 0.85, 1], repeat: Infinity, ease: "easeInOut" }}
+              >
                 <LiveMark className="h-auto w-full drop-shadow-[0_20px_40px_rgba(30,232,138,0.35)]" id="hero-mark" />
               </motion.div>
             </motion.div>

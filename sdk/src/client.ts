@@ -1,13 +1,418 @@
-// Cliente real. Dono: Dev A (IMPLEMENTACAO.md, seção 5, passo 6).
-import type { Connection } from "@solana/web3.js";
+// Cliente real do Tabbit: implementa a interface TabbitClient (types.ts) falando com o programa on-chain.
+import { AnchorError, AnchorProvider, BN, EventParser, Program } from "@coral-xyz/anchor";
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import type { Connection, TransactionInstruction, TransactionSignature } from "@solana/web3.js";
+
+import { CATEGORY_CODES } from "./constants";
+import idl from "./idl/tabbit.json";
+import type { Tabbit } from "./idl/tabbit";
+import { findConfigPda, findEmployeePda, findEmployerPda, findMerchantPda } from "./pda";
+import {
+  TabbitError,
+  type Category,
+  type ConfigAccount,
+  type EmployeeAccount,
+  type EmployerAccount,
+  type MerchantAccount,
+  type Payment,
+  type TabbitClient,
+  type TabbitErrorCode,
+  type UpsertEmployeeInput,
+} from "./types";
 import type { AnchorWallet } from "./wallet";
-import type { TabbitClient } from "./types";
 
 export interface CreateTabbitClientOptions {
   connection: Connection;
   wallet?: AnchorWallet; // sem carteira = só leitura
 }
 
-export function createTabbitClient(_opts: CreateTabbitClientOptions): TabbitClient {
-  throw new Error("TODO (Dev A): implementar createTabbitClient. Até lá o app usa o mock (NEXT_PUBLIC_USE_MOCK=true).");
+const ERROR_CODES: TabbitErrorCode[] = [
+  "Paused",
+  "Unauthorized",
+  "EmployeeInactive",
+  "MerchantInactive",
+  "ExceedsMaxPerMeal",
+  "ExceedsDailyCap",
+  "InsufficientBalance",
+  "OutsideTimeWindow",
+  "OverAllocated",
+  "InvalidAmount",
+  "NameTooLong",
+  "InvalidWindow",
+];
+
+const CATEGORY_BY_CODE: Category[] = ["restaurant", "cafe", "grocery", "other"];
+
+// Offsets (8 bytes de discriminator + campos) usados nos filtros de getProgramAccounts
+const EMPLOYEE_EMPLOYER_OFFSET = 8;
+const EMPLOYEE_WALLET_OFFSET = 8 + 32;
+
+const toBig = (v: BN): bigint => BigInt(v.toString());
+const toBN = (v: bigint): BN => new BN(v.toString());
+
+/** Carteira fake para modo só leitura (nunca assina). */
+function readOnlyWallet(): AnchorWallet {
+  const kp = Keypair.generate();
+  const fail = async (): Promise<never> => {
+    throw new TabbitError("Unauthorized", "Connect a wallet to send transactions");
+  };
+  return { publicKey: kp.publicKey, signTransaction: fail, signAllTransactions: fail };
+}
+
+function mapError(e: unknown): never {
+  if (e instanceof TabbitError) throw e;
+  const anchorErr = e instanceof AnchorError ? e : (e as { error?: { errorCode?: { code?: string } } });
+  const code = (anchorErr as AnchorError)?.error?.errorCode?.code;
+  if (code && (ERROR_CODES as string[]).includes(code)) {
+    throw new TabbitError(code as TabbitErrorCode, (anchorErr as AnchorError).error.errorMessage);
+  }
+  // Conta de restaurante inexistente = restaurante não credenciado
+  if (/AccountNotInitialized|account does not exist/i.test(String(e))) {
+    throw new TabbitError("MerchantInactive", "Merchant is not registered");
+  }
+  throw e;
+}
+
+function localDay(unixSeconds: number, tzOffsetMinutes: number): number {
+  return Math.floor((unixSeconds + tzOffsetMinutes * 60) / 86_400);
+}
+
+export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClient {
+  const wallet = opts.wallet ?? readOnlyWallet();
+  const provider = new AnchorProvider(opts.connection, wallet, { commitment: "confirmed" });
+  const program = new Program<Tabbit>(idl as Tabbit, provider);
+  const connection = opts.connection;
+  const configPda = findConfigPda(program.programId);
+
+  const me = () => {
+    if (!opts.wallet) throw new TabbitError("Unauthorized", "Connect a wallet to send transactions");
+    return opts.wallet.publicKey;
+  };
+
+  // ---------- conversores ----------
+
+  const toEmployer = (address: PublicKey, a: any): EmployerAccount => ({
+    address,
+    owner: a.owner,
+    name: a.name,
+    mint: a.mint,
+    vault: a.vault,
+    tzOffsetMinutes: a.tzOffsetMinutes,
+    totalDeposited: toBig(a.totalDeposited),
+    totalAllocated: toBig(a.totalAllocated),
+  });
+
+  const employerTzCache = new Map<string, number>();
+  async function tzOf(employer: PublicKey): Promise<number> {
+    const key = employer.toBase58();
+    if (!employerTzCache.has(key)) {
+      const e = await program.account.employer.fetch(employer);
+      employerTzCache.set(key, e.tzOffsetMinutes);
+    }
+    return employerTzCache.get(key)!;
+  }
+
+  async function toEmployee(address: PublicKey, a: any): Promise<EmployeeAccount> {
+    const tz = await tzOf(a.employer);
+    const today = localDay(Math.floor(Date.now() / 1000), tz);
+    const spentToday = a.lastSpendDay.toNumber() === today ? toBig(a.spentToday) : 0n;
+    return {
+      address,
+      employer: a.employer,
+      wallet: a.wallet,
+      balance: toBig(a.balance),
+      maxPerMeal: toBig(a.maxPerMeal),
+      dailyCap: toBig(a.dailyCap),
+      spentToday,
+      windowStartMin: a.windowStartMin,
+      windowEndMin: a.windowEndMin,
+      active: a.active,
+    };
+  }
+
+  const toMerchant = (address: PublicKey, a: any): MerchantAccount => ({
+    address,
+    wallet: a.wallet,
+    name: a.name,
+    category: CATEGORY_BY_CODE[a.category] ?? "other",
+    active: a.active,
+  });
+
+  // ---------- histórico ----------
+
+  const eventParser = new EventParser(program.programId, program.coder);
+
+  function paymentsFromLogs(signature: string, logs: string[]): Payment[] {
+    const out: Payment[] = [];
+    for (const ev of eventParser.parseLogs(logs)) {
+      if (ev.name !== "paymentMade") continue;
+      const d = ev.data as any;
+      out.push({
+        signature,
+        employer: d.employer,
+        employee: d.employee,
+        merchant: d.merchant,
+        amount: toBig(d.amount),
+        fee: toBig(d.fee),
+        timestamp: d.timestamp.toNumber(),
+      });
+    }
+    return out;
+  }
+
+  async function send(build: () => Promise<TransactionSignature>): Promise<TransactionSignature> {
+    try {
+      return await build();
+    } catch (e) {
+      mapError(e);
+    }
+  }
+
+  return {
+    // ---------- leitura ----------
+
+    async getConfig(): Promise<ConfigAccount> {
+      const c = await program.account.config.fetch(configPda);
+      return { authority: c.authority, treasury: c.treasury, feeBps: c.feeBps, paused: c.paused };
+    },
+
+    async getEmployer(owner) {
+      const address = findEmployerPda(owner, program.programId);
+      const a = await program.account.employer.fetchNullable(address);
+      return a ? toEmployer(address, a) : null;
+    },
+
+    async listEmployees(employerOwner) {
+      const employer = findEmployerPda(employerOwner, program.programId);
+      const rows = await program.account.employee.all([
+        { memcmp: { offset: EMPLOYEE_EMPLOYER_OFFSET, bytes: employer.toBase58() } },
+      ]);
+      return Promise.all(rows.map((r) => toEmployee(r.publicKey, r.account)));
+    },
+
+    async getEmployeeByWallet(wallet) {
+      const rows = await program.account.employee.all([
+        { memcmp: { offset: EMPLOYEE_WALLET_OFFSET, bytes: wallet.toBase58() } },
+      ]);
+      if (rows.length === 0) return null;
+      // MVP: 1 empresa por funcionário; se houver mais de uma, prefere a ativa
+      const row = rows.find((r) => r.account.active) ?? rows[0];
+      return toEmployee(row.publicKey, row.account);
+    },
+
+    async listMerchants() {
+      const rows = await program.account.merchant.all();
+      return rows.map((r) => toMerchant(r.publicKey, r.account));
+    },
+
+    async getMerchant(wallet) {
+      const address = findMerchantPda(wallet, program.programId);
+      const a = await program.account.merchant.fetchNullable(address);
+      return a ? toMerchant(address, a) : null;
+    },
+
+    async listPayments(filter) {
+      // Busca pelo endereço mais específico disponível
+      let address: PublicKey;
+      if (filter.merchant) address = findMerchantPda(filter.merchant, program.programId);
+      else if (filter.employee) {
+        const emp = await this.getEmployeeByWallet(filter.employee);
+        if (!emp) return [];
+        address = emp.address;
+      } else if (filter.employer) address = filter.employer;
+      else address = program.programId;
+
+      const limit = filter.limit ?? 50;
+      const sigs = await connection.getSignaturesForAddress(address, { limit }, "confirmed");
+      const ok = sigs.filter((s) => !s.err);
+      const txs = await connection.getTransactions(
+        ok.map((s) => s.signature),
+        { commitment: "confirmed", maxSupportedTransactionVersion: 0 }
+      );
+
+      const payments: Payment[] = [];
+      txs.forEach((tx, i) => {
+        const logs = tx?.meta?.logMessages;
+        if (logs) payments.push(...paymentsFromLogs(ok[i].signature, logs));
+      });
+
+      return payments
+        .filter((p) => !filter.merchant || p.merchant.equals(filter.merchant))
+        .filter((p) => !filter.employee || p.employee.equals(filter.employee))
+        .filter((p) => !filter.employer || p.employer.equals(filter.employer))
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, limit);
+    },
+
+    onPayment(cb) {
+      const id = connection.onLogs(
+        program.programId,
+        (res) => {
+          if (res.err) return;
+          paymentsFromLogs(res.signature, res.logs).forEach(cb);
+        },
+        "confirmed"
+      );
+      return () => {
+        void connection.removeOnLogsListener(id);
+      };
+    },
+
+    // ---------- escrita ----------
+
+    registerEmployer({ name, mint, tzOffsetMinutes }) {
+      const owner = me();
+      const employer = findEmployerPda(owner, program.programId);
+      return send(() =>
+        program.methods
+          .registerEmployer(name, tzOffsetMinutes)
+          .accountsPartial({
+            owner,
+            employer,
+            mint,
+            vault: getAssociatedTokenAddressSync(mint, employer, true),
+          })
+          .rpc()
+      );
+    },
+
+    async deposit(amount) {
+      const owner = me();
+      const employer = findEmployerPda(owner, program.programId);
+      const e = await program.account.employer.fetch(employer);
+      return send(() =>
+        program.methods
+          .deposit(toBN(amount))
+          .accountsPartial({
+            owner,
+            employer,
+            vault: e.vault,
+            ownerToken: getAssociatedTokenAddressSync(e.mint, owner),
+          })
+          .rpc()
+      );
+    },
+
+    upsertEmployee(input: UpsertEmployeeInput) {
+      const owner = me();
+      const employer = findEmployerPda(owner, program.programId);
+      return send(() =>
+        program.methods
+          .upsertEmployee(
+            input.wallet,
+            toBN(input.balance),
+            toBN(input.maxPerMeal),
+            toBN(input.dailyCap),
+            input.windowStartMin ?? 0,
+            input.windowEndMin ?? 0
+          )
+          .accountsPartial({
+            owner,
+            employer,
+            employee: findEmployeePda(employer, input.wallet, program.programId),
+          })
+          .rpc()
+      );
+    },
+
+    revokeEmployee(wallet) {
+      const owner = me();
+      const employer = findEmployerPda(owner, program.programId);
+      return send(() =>
+        program.methods
+          .revokeEmployee()
+          .accountsPartial({
+            owner,
+            employer,
+            employee: findEmployeePda(employer, wallet, program.programId),
+          })
+          .rpc()
+      );
+    },
+
+    async withdrawUnallocated(amount) {
+      const owner = me();
+      const employer = findEmployerPda(owner, program.programId);
+      const e = await program.account.employer.fetch(employer);
+      return send(() =>
+        program.methods
+          .withdrawUnallocated(toBN(amount))
+          .accountsPartial({
+            owner,
+            employer,
+            vault: e.vault,
+            ownerToken: getAssociatedTokenAddressSync(e.mint, owner),
+          })
+          .rpc()
+      );
+    },
+
+    registerMerchant({ wallet, name, category }) {
+      const authority = me();
+      return send(() =>
+        program.methods
+          .registerMerchant(wallet, name, CATEGORY_CODES[category])
+          .accountsPartial({
+            authority,
+            config: configPda,
+            merchant: findMerchantPda(wallet, program.programId),
+          })
+          .rpc()
+      );
+    },
+
+    setMerchantActive(wallet, active) {
+      const authority = me();
+      return send(() =>
+        program.methods
+          .setMerchantActive(active)
+          .accountsPartial({
+            authority,
+            config: configPda,
+            merchant: findMerchantPda(wallet, program.programId),
+          })
+          .rpc()
+      );
+    },
+
+    async pay({ merchant, amount }) {
+      const payer = me();
+      const emp = await this.getEmployeeByWallet(payer);
+      if (!emp) throw new TabbitError("EmployeeInactive", "This wallet has no meal benefit");
+      const [employer, config] = await Promise.all([
+        program.account.employer.fetch(emp.employer),
+        program.account.config.fetch(configPda),
+      ]);
+
+      const merchantToken = getAssociatedTokenAddressSync(employer.mint, merchant);
+      const treasuryToken = getAssociatedTokenAddressSync(employer.mint, config.treasury);
+
+      // Cria as contas de token do restaurante e da tesouraria se ainda não existirem
+      const pre: TransactionInstruction[] = [
+        createAssociatedTokenAccountIdempotentInstruction(payer, merchantToken, merchant, employer.mint),
+        createAssociatedTokenAccountIdempotentInstruction(payer, treasuryToken, config.treasury, employer.mint),
+      ];
+
+      return send(() =>
+        program.methods
+          .pay(toBN(amount))
+          .accountsPartial({
+            payer,
+            config: configPda,
+            employer: emp.employer,
+            employee: emp.address,
+            merchant: findMerchantPda(merchant, program.programId),
+            vault: employer.vault,
+            merchantToken,
+            treasuryToken,
+          })
+          .preInstructions(pre)
+          .rpc()
+      );
+    },
+  };
 }

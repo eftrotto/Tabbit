@@ -40,25 +40,24 @@ export function useTabbit(role: Role): TabbitContext {
   }, [connection, wallet, role]);
 }
 
-/** Carrega dados assíncronos com estado de loading/erro e `reload()` para depois de uma escrita. */
+/** Carrega dados assíncronos. `loading` só no primeiro carregamento; `reload()` recarrega mantendo os dados atuais. */
 export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
-  const [data, setData] = useState<T | undefined>();
-  const [error, setError] = useState<unknown>();
-  const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const run = useCallback(fn, deps);
-  const reload = useCallback(() => {
-    setLoading(true);
-    return run()
-      .then((d) => {
-        setData(d);
-        setError(undefined);
-      })
-      .catch(setError)
-      .finally(() => setLoading(false));
-  }, [run]);
+  const [state, setState] = useState<{ data?: T; error?: unknown }>({});
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    reload();
-  }, [reload]);
-  return { data, error, loading, reload };
+    let alive = true;
+    fn().then(
+      (data) => alive && setState({ data }),
+      (error) => alive && setState((s) => ({ ...s, error }))
+    );
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, tick]);
+  const reload = useCallback(() => {
+    setTick((t) => t + 1);
+    return Promise.resolve();
+  }, []);
+  return { data: state.data, error: state.error, loading: state.data === undefined && !state.error, reload };
 }

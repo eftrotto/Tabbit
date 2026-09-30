@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { CURRENCIES, formatFiat, type DisplayCurrency } from "@/lib/currency";
@@ -18,19 +18,32 @@ export function useCurrency() {
   return ctx;
 }
 
+// Moeda escolhida fica no localStorage; useSyncExternalStore evita divergência de hidratação.
+const CURRENCY_KEY = "tabbit-currency";
+const currencyListeners = new Set<() => void>();
+function readCurrency(): DisplayCurrency {
+  try {
+    const saved = localStorage.getItem(CURRENCY_KEY) as DisplayCurrency | null;
+    if (saved && CURRENCIES.includes(saved)) return saved;
+  } catch {}
+  return "BRL";
+}
+function subscribeCurrency(cb: () => void) {
+  currencyListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    currencyListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
 function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [currency, setCurrencyState] = useState<DisplayCurrency>("BRL");
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("tabbit-currency") as DisplayCurrency | null;
-      if (saved && CURRENCIES.includes(saved)) setCurrencyState(saved);
-    } catch {}
-  }, []);
+  const currency = useSyncExternalStore(subscribeCurrency, readCurrency, () => "BRL" as DisplayCurrency);
   const setCurrency = (c: DisplayCurrency) => {
-    setCurrencyState(c);
     try {
-      localStorage.setItem("tabbit-currency", c);
+      localStorage.setItem(CURRENCY_KEY, c);
     } catch {}
+    currencyListeners.forEach((cb) => cb());
   };
   return (
     <CurrencyContext.Provider value={{ currency, setCurrency, fiat: (b) => formatFiat(b, currency) }}>

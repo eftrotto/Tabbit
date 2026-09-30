@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐇 Tabbit
+# Tabbit
 
 **On-chain meal benefits for Brazil.**
 Employers fund in USDC, workers pay by QR, restaurants get paid in seconds. Built on Base.
@@ -20,17 +20,6 @@ Brazil's meal-voucher program (PAT) covers **22M+ workers** at **327k companies*
 - Rules like "food only" and "lunch hours" are enforced by opaque, centralized systems nobody can audit.
 
 The same decree mandates **interoperability** (rolling out through Nov/2026) and **worker portability**, opening the market to new payment rails for the first time.
-
-## The solution
-
-Tabbit replaces the closed operator network with a **smart contract on Base**:
-
-| | Legacy operators | Tabbit |
-|---|---|---|
-| Merchant fee | up to 3.6% | **0.5%** |
-| Settlement | up to 15 days | **seconds** |
-| Rule enforcement | opaque, centralized | **on-chain, auditable** |
-| Worker UX | plastic card | **QR code, no gas, no seed phrase** |
 
 ### How it works
 
@@ -52,14 +41,7 @@ Restaurant wallet ◀──── instant USDC settlement (−0.5% fee) ─┘
 
 ## Architecture
 
-| Layer | Stack |
-|---|---|
-| Network | Base (Base Sepolia for the MVP) |
-| Smart contracts | Solidity ^0.8.24, OpenZeppelin (AccessControl, SafeERC20, Pausable, ReentrancyGuard), Foundry |
-| Stablecoin | Circle USDC |
-| Wallet & UX | Coinbase Smart Wallet, OnchainKit, paymaster (gasless) |
-| Frontend | React, wagmi, viem |
-| Data | Contract events (no backend) |
+#preencher 
 
 ### Smart contract: `MealVoucher.sol`
 

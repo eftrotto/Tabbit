@@ -5,7 +5,24 @@
   --color-brand: #1ee88a;
   --color-ink: #0b2b2b;
   --color-paper: #faf8f3;
+  --color-night: #041a19;
+  --color-mint: #5cf5a6;
+  --color-deep: #07574f;
   --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-nunito), var(--font-inter), system-ui, sans-serif;
+
+  --animate-marquee: marquee 32s linear infinite;
+  --animate-drift: drift 18s ease-in-out infinite alternate;
+  --animate-ping-slow: ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+
+  @keyframes marquee {
+    to { transform: translateX(-50%); }
+  }
+  @keyframes drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(6%, -4%, 0) scale(1.08); }
+    100% { transform: translate3d(-4%, 5%, 0) scale(0.96); }
+  }
 }
 
 body {
@@ -41,4 +58,33 @@ body {
   border-radius: 0.75rem !important;
   height: 2.5rem !important;
   font-size: 0.875rem !important;
+}
+
+/* Landing */
+html {
+  scroll-behavior: smooth;
+}
+@utility text-gradient {
+  @apply bg-gradient-to-r from-mint via-brand to-[#9dfbc9] bg-clip-text text-transparent;
+}
+/* Grade sutil que some nas bordas */
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 75%);
+}
+@utility glass {
+  @apply border border-white/10 bg-white/[0.06] backdrop-blur-xl;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-marquee,
+  .animate-drift,
+  .animate-ping-slow {
+    animation: none;
+  }
 }

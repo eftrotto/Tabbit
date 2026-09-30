@@ -3,6 +3,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { CURRENCIES, type DisplayCurrency } from "@/lib/currency";
+import { TabbitMark } from "./brand";
 import { useCurrency } from "./providers";
 
 // Botão da carteira só no cliente (evita divergência de hidratação).
@@ -18,17 +19,7 @@ const NAV = [
 ];
 
 export function Logo({ className = "h-8 w-8" }: { className?: string }) {
-  // Mascote: coelho verde minimalista.
-  return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <ellipse cx="11" cy="8" rx="3" ry="7" fill="#1EE88A" />
-      <ellipse cx="21" cy="8" rx="3" ry="7" fill="#1EE88A" />
-      <circle cx="16" cy="20" r="10" fill="#1EE88A" />
-      <circle cx="12.5" cy="19" r="1.5" fill="#0B2B2B" />
-      <circle cx="19.5" cy="19" r="1.5" fill="#0B2B2B" />
-      <path d="M13.5 24q2.5 2 5 0" stroke="#0B2B2B" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-    </svg>
-  );
+  return <TabbitMark className={className} id="header-mark" />;
 }
 
 export function Header() {

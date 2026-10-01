@@ -25,7 +25,7 @@ npm install
 Só o Dev A precisa do toolchain Solana: Rust estável, Solana CLI 2.3.x (`sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"`), Anchor 0.31.1 (`cargo install --git https://github.com/solana-foundation/anchor avm --force && avm install 0.31.1 && avm use 0.31.1`). No Windows, use WSL2 (Ubuntu); Anchor não roda bem no Windows nativo.
 
 - `anchor build` deve compilar de primeira. **Não rode `cargo update`**: o `Cargo.lock` fixa `blake3 1.8.2` e `zeroize 1.8.x` porque as versões novas exigem Rust 1.85+ e o compilador da Solana 2.3 é 1.84.
-- O `PROGRAM_ID` atual (`2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF`) é provisório. No primeiro deploy o Dev A roda `anchor keys sync` (gera a chave dele e atualiza `lib.rs` e `Anchor.toml`) e atualiza `sdk/src/constants.ts`. A chave do programa (`target/deploy/tabbit-keypair.json`) **não vai para o git**; guardem com cuidado.
+- O `PROGRAM_ID` da devnet é `Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn` (deploy de 01/10). A chave do programa (`target/deploy/tabbit-keypair.json`) **não vai para o git**; guardem com cuidado, ela é necessária para atualizar o programa.
 
 ---
 

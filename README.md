@@ -5,6 +5,8 @@
 **Smart spending, verified.**
 On-chain meal benefits. Employers fund in USDC, workers pay by QR, restaurants get paid in seconds. Built on Solana.
 
+**Live demo:** [tabbit-sol.vercel.app](https://tabbit-sol.vercel.app)
+
 *Built for the [Colosseum Crypto World's Fair](https://colosseum.com/worldsfair) hackathon (Sep 14 – Oct 12, 2026).*
 
 </div>

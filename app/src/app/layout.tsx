@@ -9,7 +9,7 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin", "latin-ext"], weight: ["700", "800", "900"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://tabbit-sol.vercel.app"),
   title: "Tabbit — Smart spending, verified.",
   description: "On-chain meal benefits on Solana. Employers fund in USDC, workers pay by QR, restaurants get paid in seconds.",
   openGraph: {

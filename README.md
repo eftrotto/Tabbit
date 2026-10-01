@@ -86,13 +86,13 @@ Team docs (Portuguese): [`docs/IMPLEMENTACAO.md`](docs/IMPLEMENTACAO.md).
 
 | Network | Program | Address |
 |---|---|---|
-| Solana devnet | tabbit | _TBD_ |
+| Solana devnet | tabbit | [`Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn`](https://explorer.solana.com/address/Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn?cluster=devnet) |
 
 ## Roadmap
 
 - [x] Concept and architecture
 - [ ] `tabbit` program + full test suite
-- [ ] Devnet deployment
+- [x] Devnet deployment
 - [ ] Employer, worker and restaurant apps
 - [ ] Gasless payments (app as fee payer)
 - [ ] Pilot with real restaurants in São Paulo

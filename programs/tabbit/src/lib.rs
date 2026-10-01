@@ -10,7 +10,7 @@ pub mod time;
 
 use instructions::*;
 
-declare_id!("2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF");
+declare_id!("Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn");
 
 #[program]
 pub mod tabbit {

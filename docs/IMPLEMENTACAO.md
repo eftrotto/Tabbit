@@ -10,7 +10,8 @@
 - [x] **20 testes passando** (`anchor test`): 19 de regras do programa + 1 de ponta a ponta do SDK
 - [x] **SDK real** (`createTabbitClient`) implementando toda a interface, com erros tipados
 - [x] Script de dados de demo (`npm run seed`) e exportador de chave para o Phantom (`npm run key:export`)
-- [ ] Dev A: **deploy na devnet** (seção 5.1) e fee payer (extra)
+- [x] Dev A: **deploy na devnet** feito em 01/10: programa `Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn`, mint de teste `4ZCy4DfmE9EfoPA1uipY6LxGe3ttVXFR91pta5vQxKJ5` (seed rodado)
+- [ ] Dev A: fee payer (extra)
 - [ ] Dev B: criar o app em `app/` e as 3 visões (seção 6). Pode usar o SDK real direto em localnet ou devnet; o mock continua útil para trabalhar offline
 
 ## Setup (os dois)

@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 // Atualize depois do primeiro deploy (anchor keys sync + anchor deploy).
-export const PROGRAM_ID = new PublicKey("2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF");
+export const PROGRAM_ID = new PublicKey("Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn");
 
 // USDC de teste da Circle na devnet (faucet: https://faucet.circle.com)
 export const USDC_DEVNET_MINT = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");

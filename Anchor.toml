@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-tabbit = "2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF"
+tabbit = "Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn"
 
 [programs.devnet]
-tabbit = "2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF"
+tabbit = "Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn"
 
 [provider]
 cluster = "localnet"

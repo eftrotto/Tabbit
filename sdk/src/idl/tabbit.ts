@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/tabbit.json`.
  */
 export type Tabbit = {
-  "address": "2Mh4bbby1Fu7zhdygoK634QgGaemQGsTg5vx8JHFjemF",
+  "address": "Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn",
   "metadata": {
     "name": "tabbit",
     "version": "0.1.0",

@@ -5,7 +5,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import type { Connection, TransactionInstruction, TransactionSignature } from "@solana/web3.js";
+import type { Connection, Transaction, TransactionInstruction, TransactionSignature } from "@solana/web3.js";
 
 import { CATEGORY_CODES } from "./constants";
 import idl from "./idl/tabbit.json";
@@ -164,9 +164,56 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     return out;
   }
 
-  async function send(build: () => Promise<TransactionSignature>): Promise<TransactionSignature> {
+  // Transações confirmadas não mudam: guarda os pagamentos já lidos de cada assinatura
+  const paymentsBySig = new Map<string, Payment[]>();
+
+  // A RPC pública da devnet responde 429 quando recebe muitas chamadas seguidas
+  async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
+    for (let i = 0; ; i++) {
+      try {
+        return await fn();
+      } catch (e) {
+        if (i >= tries - 1 || !/429|too many requests/i.test(String(e))) throw e;
+        await new Promise((r) => setTimeout(r, 500 * 2 ** i));
+      }
+    }
+  }
+
+  async function paymentsOf(signatures: string[]): Promise<Payment[]> {
+    const missing = signatures.filter((s) => !paymentsBySig.has(s));
+    // Sem getTransactions em lote (a RPC pública recusa); busca uma por vez
+    for (let i = 0; i < missing.length; i += 1) {
+      await Promise.all(
+        missing.slice(i, i + 1).map(async (sig) => {
+          const tx = await withRetry(() =>
+            connection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 })
+          );
+          if (!tx) return; // ainda não indexada; tenta de novo na próxima leitura
+          const logs = tx.meta?.logMessages;
+          paymentsBySig.set(sig, logs ? paymentsFromLogs(sig, logs) : []);
+        })
+      );
+    }
+    return signatures.flatMap((s) => paymentsBySig.get(s) ?? []);
+  }
+
+  // Simula antes de pedir a assinatura: se o programa recusar (limite, saldo, horário...),
+  // o app recebe o TabbitError na hora e a carteira nem abre o aviso de "transação revertida".
+  async function send(builder: {
+    transaction(): Promise<Transaction>;
+    rpc(): Promise<TransactionSignature>;
+  }): Promise<TransactionSignature> {
     try {
-      return await build();
+      const tx = await builder.transaction();
+      tx.feePayer = me();
+      const sim = await connection.simulateTransaction(tx);
+      if (sim.value.err) {
+        throw (
+          AnchorError.parse(sim.value.logs ?? []) ??
+          new Error(`Transaction simulation failed: ${JSON.stringify(sim.value.err)}\n${(sim.value.logs ?? []).join("\n")}`)
+        );
+      }
+      return await builder.rpc();
     } catch (e) {
       mapError(e);
     }
@@ -227,18 +274,11 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       else address = program.programId;
 
       const limit = filter.limit ?? 50;
-      const sigs = await connection.getSignaturesForAddress(address, { limit }, "confirmed");
-      const ok = sigs.filter((s) => !s.err);
-      const txs = await connection.getTransactions(
-        ok.map((s) => s.signature),
-        { commitment: "confirmed", maxSupportedTransactionVersion: 0 }
+      // A conta da empresa também aparece em depósitos e cadastros: busca mais assinaturas que o limite
+      const sigs = await withRetry(() =>
+        connection.getSignaturesForAddress(address, { limit: Math.min(limit * 3, 100) }, "confirmed")
       );
-
-      const payments: Payment[] = [];
-      txs.forEach((tx, i) => {
-        const logs = tx?.meta?.logMessages;
-        if (logs) payments.push(...paymentsFromLogs(ok[i].signature, logs));
-      });
+      const payments = await paymentsOf(sigs.filter((s) => !s.err).map((s) => s.signature));
 
       return payments
         .filter((p) => !filter.merchant || p.merchant.equals(filter.merchant))
@@ -267,7 +307,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     registerEmployer({ name, mint, tzOffsetMinutes }) {
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
-      return send(() =>
+      return send(
         program.methods
           .registerEmployer(name, tzOffsetMinutes)
           .accountsPartial({
@@ -276,7 +316,6 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             mint,
             vault: getAssociatedTokenAddressSync(mint, employer, true),
           })
-          .rpc()
       );
     },
 
@@ -284,7 +323,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
       const e = await program.account.employer.fetch(employer);
-      return send(() =>
+      return send(
         program.methods
           .deposit(toBN(amount))
           .accountsPartial({
@@ -293,14 +332,13 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             vault: e.vault,
             ownerToken: getAssociatedTokenAddressSync(e.mint, owner),
           })
-          .rpc()
       );
     },
 
     upsertEmployee(input: UpsertEmployeeInput) {
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
-      return send(() =>
+      return send(
         program.methods
           .upsertEmployee(
             input.wallet,
@@ -315,14 +353,13 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             employer,
             employee: findEmployeePda(employer, input.wallet, program.programId),
           })
-          .rpc()
       );
     },
 
     revokeEmployee(wallet) {
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
-      return send(() =>
+      return send(
         program.methods
           .revokeEmployee()
           .accountsPartial({
@@ -330,7 +367,6 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             employer,
             employee: findEmployeePda(employer, wallet, program.programId),
           })
-          .rpc()
       );
     },
 
@@ -338,7 +374,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
       const e = await program.account.employer.fetch(employer);
-      return send(() =>
+      return send(
         program.methods
           .withdrawUnallocated(toBN(amount))
           .accountsPartial({
@@ -347,13 +383,12 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             vault: e.vault,
             ownerToken: getAssociatedTokenAddressSync(e.mint, owner),
           })
-          .rpc()
       );
     },
 
     registerMerchant({ wallet, name, category }) {
       const authority = me();
-      return send(() =>
+      return send(
         program.methods
           .registerMerchant(wallet, name, CATEGORY_CODES[category])
           .accountsPartial({
@@ -361,13 +396,12 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             config: configPda,
             merchant: findMerchantPda(wallet, program.programId),
           })
-          .rpc()
       );
     },
 
     setMerchantActive(wallet, active) {
       const authority = me();
-      return send(() =>
+      return send(
         program.methods
           .setMerchantActive(active)
           .accountsPartial({
@@ -375,7 +409,6 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             config: configPda,
             merchant: findMerchantPda(wallet, program.programId),
           })
-          .rpc()
       );
     },
 
@@ -397,7 +430,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
         createAssociatedTokenAccountIdempotentInstruction(payer, treasuryToken, config.treasury, employer.mint),
       ];
 
-      return send(() =>
+      return send(
         program.methods
           .pay(toBN(amount))
           .accountsPartial({
@@ -411,7 +444,6 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             treasuryToken,
           })
           .preInstructions(pre)
-          .rpc()
       );
     },
   };

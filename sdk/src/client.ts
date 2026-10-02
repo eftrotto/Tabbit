@@ -64,6 +64,24 @@ const EMPLOYEE_WALLET_OFFSET = 8 + 32;
 
 const UPSERTS_PER_TX = 8;
 
+// A RPC pública da devnet limita bem forte o getProgramAccounts (varredura de contas). Cada tela
+// chamava várias vezes coisas que quase nunca mudam; este cache é compartilhado entre os clientes
+// (o app recria o cliente a cada troca de carteira) e junta chamadas iguais que estão em andamento.
+const MERCHANTS_TTL_MS = 60_000;
+const CONFIG_TTL_MS = 15_000;
+const shared = new Map<string, { at: number; value: Promise<unknown> }>();
+/** Carteira do funcionário → endereço da conta Employee (não muda: é um PDA). */
+const employeeAddressByWallet = new Map<string, PublicKey>();
+
+function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+  const hit = shared.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.value as Promise<T>;
+  const value = load();
+  shared.set(key, { at: Date.now(), value });
+  value.catch(() => shared.delete(key)); // erro não fica no cache
+  return value;
+}
+
 const toBig = (v: BN): bigint => BigInt(v.toString());
 const toBN = (v: bigint): BN => new BN(v.toString());
 
@@ -100,6 +118,8 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
   const program = new Program<Tabbit>(idl as Tabbit, provider);
   const connection = opts.connection;
   const configPda = findConfigPda(program.programId);
+  const cacheKey = (name: string) => `${connection.rpcEndpoint}|${program.programId.toBase58()}|${name}`;
+  const invalidate = (name: string) => shared.delete(cacheKey(name));
 
   const me = () => {
     if (!opts.wallet) throw new TabbitError("Unauthorized", "Connect a wallet to send transactions");
@@ -280,9 +300,11 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
   return {
     // ---------- leitura ----------
 
-    async getConfig(): Promise<ConfigAccount> {
-      const c = await program.account.config.fetch(configPda);
-      return { authority: c.authority, treasury: c.treasury, feeBps: c.feeBps, paused: c.paused, mint: c.mint };
+    getConfig(): Promise<ConfigAccount> {
+      return cached(cacheKey("config"), CONFIG_TTL_MS, async () => {
+        const c = await program.account.config.fetch(configPda);
+        return { authority: c.authority, treasury: c.treasury, feeBps: c.feeBps, paused: c.paused, mint: c.mint };
+      });
     },
 
     async getEmployer(owner) {
@@ -306,18 +328,27 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     },
 
     async getEmployeeByWallet(wallet) {
-      const rows = await program.account.employee.all([
-        { memcmp: { offset: EMPLOYEE_WALLET_OFFSET, bytes: wallet.toBase58() } },
-      ]);
+      // Já sabemos onde fica a conta: leitura direta, sem varrer o programa
+      const known = employeeAddressByWallet.get(wallet.toBase58());
+      if (known) {
+        const a = await program.account.employee.fetchNullable(known);
+        if (a?.active) return toEmployee(known, a);
+      }
+      const rows = await cached(cacheKey(`employee:${wallet.toBase58()}`), 5_000, () =>
+        program.account.employee.all([{ memcmp: { offset: EMPLOYEE_WALLET_OFFSET, bytes: wallet.toBase58() } }])
+      );
       if (rows.length === 0) return null;
       // MVP: 1 empresa por funcionário; se houver mais de uma, prefere a ativa
       const row = rows.find((r) => r.account.active) ?? rows[0];
+      employeeAddressByWallet.set(wallet.toBase58(), row.publicKey);
       return toEmployee(row.publicKey, row.account);
     },
 
-    async listMerchants() {
-      const rows = await program.account.merchant.all();
-      return rows.map((r) => toMerchant(r.publicKey, r.account));
+    listMerchants() {
+      return cached(cacheKey("merchants"), MERCHANTS_TTL_MS, async () => {
+        const rows = await program.account.merchant.all();
+        return rows.map((r) => toMerchant(r.publicKey, r.account));
+      });
     },
 
     async getMerchant(wallet) {
@@ -477,7 +508,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             config: configPda,
             merchant: findMerchantPda(wallet, program.programId),
           })
-      );
+      ).finally(() => invalidate("merchants"));
     },
 
     setEmployerApproved(owner, approved) {
@@ -491,7 +522,9 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
     setPaused(paused) {
       const authority = me();
-      return send(program.methods.setPaused(paused).accountsPartial({ authority, config: configPda }));
+      return send(program.methods.setPaused(paused).accountsPartial({ authority, config: configPda })).finally(() =>
+        invalidate("config")
+      );
     },
 
     setMerchantActive(wallet, active) {
@@ -504,7 +537,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
             config: configPda,
             merchant: findMerchantPda(wallet, program.programId),
           })
-      );
+      ).finally(() => invalidate("merchants"));
     },
 
     async pay({ merchant, amount }) {

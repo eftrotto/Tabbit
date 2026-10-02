@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
 import { ConnectionProvider, WalletProvider } from "@solana/wallet-adapter-react";
+import type { WalletError } from "@solana/wallet-adapter-base";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { CURRENCIES, formatFiat, type DisplayCurrency } from "@/lib/currency";
 import { RPC_URL } from "@/lib/tabbit";
@@ -52,11 +53,17 @@ function CurrencyProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Recusar a conexão na Phantom é escolha do usuário, não erro do app: não suja o console.
+function onWalletError(e: WalletError) {
+  if (/reject/i.test(e.message)) return;
+  console.error(e);
+}
+
 // Phantom se registra sozinho via Wallet Standard, por isso a lista de adapters é vazia.
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ConnectionProvider endpoint={RPC_URL}>
-      <WalletProvider wallets={[]} autoConnect>
+      <WalletProvider wallets={[]} autoConnect onError={onWalletError}>
         <WalletModalProvider>
           <CurrencyProvider>{children}</CurrencyProvider>
         </WalletModalProvider>

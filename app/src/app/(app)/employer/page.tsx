@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import type { EmployeeAccount, EmployerAccount, TabbitClient } from "@tabbit/sdk";
 import { Card, DemoBanner, ErrorText, Money, shortKey } from "@/components/ui";
 import { friendlyError } from "@/lib/errors";
-import { formatWindow } from "@/lib/time";
-import { BENEFIT_MINT, explorerAddressUrl, useLoad, useTabbit } from "@/lib/tabbit";
+import { useLoad, useTabbit } from "@/lib/tabbit";
 import { EmployeeForm } from "./employee-form";
+import { EmployeesCard } from "./employees";
+import { CopyButton } from "../employee/shared";
 import { TxStatus, useTx } from "./tx";
 import { Vault } from "./vault";
 
@@ -25,11 +26,13 @@ function RegisterForm({ client, isMock, onDone }: { client: TabbitClient; isMock
     e.preventDefault();
     const n = name.trim();
     if (!n || n.length > 32) return tx.setError("Company name must be 1 to 32 characters");
-    tx.run(() => client.registerEmployer({ name: n, mint: BENEFIT_MINT, tzOffsetMinutes: tz }), onDone);
+    tx.run(() => client.registerEmployer({ name: n, tzOffsetMinutes: tz }), onDone);
   }
   return (
     <Card title="Register your company">
-      <p className="mb-4 text-sm opacity-70">Create your vault to start funding meal benefits for your team.</p>
+      <p className="mb-4 text-sm opacity-70">
+        Create your company vault. The Tabbit team reviews every company (contract and verification) before it can fund benefits; we will contact you after you register.
+      </p>
       <form onSubmit={submit} className="grid max-w-md gap-4">
         <div>
           <label className="label" htmlFor="reg-name">Company name</label>
@@ -48,13 +51,27 @@ function RegisterForm({ client, isMock, onDone }: { client: TabbitClient; isMock
   );
 }
 
+function PendingApproval({ employer }: { employer: EmployerAccount }) {
+  return (
+    <div role="status" className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-5">
+      <p className="text-lg font-bold text-amber-900">Waiting for Tabbit approval</p>
+      <p className="mt-1 text-sm text-amber-900/80">
+        {employer.name} is registered. Once our team approves it you can deposit and add employees. Share this wallet with your Tabbit contact:
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <code className="min-w-0 flex-1 break-all rounded-lg bg-white/70 px-3 py-2 text-xs">{employer.owner.toBase58()}</code>
+        <CopyButton text={employer.owner.toBase58()} />
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ client, employer, isMock, reloadEmployer }: {
   client: TabbitClient; employer: EmployerAccount; isMock: boolean; reloadEmployer: () => Promise<unknown>;
 }) {
   const employees = useLoad(() => client.listEmployees(employer.owner), [client, employer.owner]);
   const payments = useLoad(() => client.listPayments({ employer: employer.address, limit: 10 }), [client, employer.address]);
   const [editing, setEditing] = useState<EmployeeAccount | "new" | null>(null);
-  const revokeTx = useTx();
   const { reload: reloadEmployees } = employees;
   const { reload: reloadPayments } = payments;
   const refresh = () => Promise.all([reloadEmployer(), reloadEmployees(), reloadPayments()]);
@@ -65,14 +82,10 @@ function Dashboard({ client, employer, isMock, reloadEmployer }: {
     [client, reloadEmployer, reloadEmployees, reloadPayments]
   );
 
-  function revoke(e: EmployeeAccount) {
-    if (!confirm(`Revoke ${shortKey(e.wallet)}? They will no longer be able to pay with Tabbit.`)) return;
-    revokeTx.run(() => client.revokeEmployee(e.wallet), refresh);
-  }
-
   const free = employer.totalDeposited - employer.totalAllocated;
   return (
     <div className="space-y-6">
+      {!employer.approved && <PendingApproval employer={employer} />}
       <Vault client={client} employer={employer} isMock={isMock} onChanged={refresh} />
 
       {editing && (
@@ -80,55 +93,8 @@ function Dashboard({ client, employer, isMock, reloadEmployer }: {
           editing={editing === "new" ? null : editing} onSaved={refresh} onCancel={() => setEditing(null)} />
       )}
 
-      <Card title="Employees">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <button className="btn-primary" onClick={() => setEditing("new")}>Add employee</button>
-          <TxStatus error={revokeTx.error} sig={revokeTx.sig} isMock={isMock} />
-        </div>
-        {employees.error ? <ErrorText>{friendlyError(employees.error)}</ErrorText>
-          : !employees.data ? <p className="text-sm opacity-60">Loading…</p>
-          : employees.data.length === 0 ? <p className="text-sm opacity-70">No employees yet. Add one to start allocating meal benefits.</p>
-          : (
-            <div className="-mx-2 overflow-x-auto px-2">
-              <table className="w-full min-w-[46rem] text-left text-sm">
-                <thead className="border-b border-ink/10 text-xs opacity-70">
-                  <tr>
-                    {["Wallet", "Balance", "Max / meal", "Daily cap", "Spent today", "Meal hours", "Status", ""].map((h, i) => (
-                      <th key={i} className="px-2 py-2 font-medium">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {employees.data.map((e) => (
-                    <tr key={e.address.toBase58()} className="border-b border-ink/5 align-top last:border-0">
-                      <td className="px-2 py-2.5 font-mono">
-                        <a className="underline decoration-ink/30 hover:decoration-ink" href={explorerAddressUrl(e.wallet)} target="_blank" rel="noreferrer">{shortKey(e.wallet)}</a>
-                      </td>
-                      <td className="px-2 py-2.5"><Money base={e.balance} /></td>
-                      <td className="px-2 py-2.5"><Money base={e.maxPerMeal} /></td>
-                      <td className="px-2 py-2.5"><Money base={e.dailyCap} /></td>
-                      <td className="px-2 py-2.5"><Money base={e.spentToday} /></td>
-                      <td className="whitespace-nowrap px-2 py-2.5">{formatWindow(e.windowStartMin, e.windowEndMin)}</td>
-                      <td className="px-2 py-2.5">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.active ? "bg-brand/25" : "bg-red-100 text-red-700"}`}>
-                          {e.active ? "Active" : "Revoked"}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-2 py-2.5 text-right">
-                        <button className="underline" onClick={() => setEditing(e)}>{e.active ? "Edit" : "Reactivate"}</button>
-                        {e.active && (
-                          <button className="ml-3 text-red-700 underline disabled:opacity-50" disabled={revokeTx.pending} onClick={() => revoke(e)}>
-                            {revokeTx.pending ? "…" : "Revoke"}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-      </Card>
+      <EmployeesCard client={client} employer={employer} employees={employees.data} error={employees.error} isMock={isMock}
+        onChanged={refresh} onAdd={() => setEditing("new")} onEdit={(e) => setEditing(e)} />
 
       <Card title="Recent payments">
         {payments.error ? <ErrorText>{friendlyError(payments.error)}</ErrorText>

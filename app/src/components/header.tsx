@@ -6,6 +6,7 @@ import { CURRENCIES, type DisplayCurrency } from "@/lib/currency";
 import { motion } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useEmployeeLogin } from "@/lib/employee-wallet";
+import { useLoad, useTabbit } from "@/lib/tabbit";
 import { TabbitMark, Wordmark } from "./brand";
 import { useCurrency } from "./providers";
 
@@ -44,8 +45,17 @@ function AccountButton({ employeeView }: { employeeView: boolean }) {
   );
 }
 
+/** Mostra a aba Admin só para a carteira da plataforma (no modo demo, a persona da plataforma). */
+function useIsPlatform() {
+  const { client, actor } = useTabbit("admin");
+  const { data } = useLoad(async () => (actor ? (await client.getConfig()).authority.equals(actor) : false), [client, actor]);
+  return !!data;
+}
+
 export function Header() {
   const path = usePathname();
+  const isPlatform = useIsPlatform();
+  const nav = isPlatform ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
   const { currency, setCurrency } = useCurrency();
   return (
     <header className="sticky top-0 z-40 px-3 pt-3">
@@ -55,7 +65,7 @@ export function Header() {
           <Wordmark />
         </Link>
         <nav className="order-last flex w-full gap-1 rounded-xl bg-ink/[0.05] p-1 text-sm sm:order-none sm:w-auto">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const active = path.startsWith(n.href) || (n.href === "/employee" && path.startsWith("/pay"));
             return (
               <Link key={n.href} href={n.href} className={`relative flex-1 rounded-lg px-3 py-1.5 text-center font-semibold transition sm:flex-none ${active ? "text-brand" : "text-ink/60 hover:text-ink"}`}>

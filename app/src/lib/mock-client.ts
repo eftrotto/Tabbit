@@ -19,6 +19,7 @@ export const DEMO = {
   platform: new PublicKey("g7MZs2qX4nHkVfRtvfL3GWTJZUCyRkK7mv1dbKqm46s"),
   treasury: new PublicKey("GMJuDb7qS2ARqmi895J3LLZ9Y1hWTy926iJwXf7WD8Eu"),
   employer: new PublicKey("A1h1G5psMdVHWkYbj5LRJc6EoqbYQpg5bWeiJrvRaVMi"),
+  employer2: new PublicKey("9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"), // Globex (pendente)
   employee: new PublicKey("3u8xzDymuD9dKJjWoPfvZfsEBNNbUsHhNN9mYM9mhxTG"), // João
   employee2: new PublicKey("C7MHQt6NvWnkPA6TjpJ5K8yGkrLEyH4xnmmZdzJb753M"), // Maria
   merchant: new PublicKey("Lhm3L14ZUbMKsRGSFmhBAttL36dCT2QGTWBn18SU6uH"),
@@ -27,16 +28,16 @@ export const DEMO = {
 };
 
 const USDC = 1_000_000n;
-const STORAGE_KEY = "tabbit-mock-v1";
+const STORAGE_KEY = "tabbit-mock-v2"; // v2: aprovação de empresas e token oficial
 const CATEGORIES: Category[] = ["restaurant", "cafe", "grocery", "other"];
 
 // Estado guardado só com tipos serializáveis (base58 + bigint).
-interface EmployerRow { owner: string; name: string; mint: string; tzOffsetMinutes: number; totalDeposited: bigint; totalAllocated: bigint }
+interface EmployerRow { owner: string; name: string; mint: string; tzOffsetMinutes: number; totalDeposited: bigint; totalAllocated: bigint; approved: boolean }
 interface EmployeeRow { employerOwner: string; wallet: string; balance: bigint; maxPerMeal: bigint; dailyCap: bigint; spentToday: bigint; lastSpendDay: number; windowStartMin: number; windowEndMin: number; active: boolean }
 interface MerchantRow { wallet: string; name: string; category: Category; active: boolean }
 interface PaymentRow { signature: string; employer: string; employee: string; merchant: string; amount: bigint; fee: bigint; timestamp: number }
 interface Store {
-  config: { authority: string; treasury: string; feeBps: number; paused: boolean };
+  config: { authority: string; treasury: string; feeBps: number; paused: boolean; mint: string };
   employers: EmployerRow[];
   employees: EmployeeRow[];
   merchants: MerchantRow[];
@@ -50,8 +51,12 @@ function seed(): Store {
     dailyCap: BigInt(dailyCap) * USDC, spentToday: 0n, lastSpendDay: 0, windowStartMin, windowEndMin, active: true,
   });
   return {
-    config: { authority: DEMO.platform.toBase58(), treasury: DEMO.treasury.toBase58(), feeBps: 80, paused: false },
-    employers: [{ owner, name: "Acme Corp", mint: USDC_DEVNET_MINT.toBase58(), tzOffsetMinutes: -180, totalDeposited: 1000n * USDC, totalAllocated: 350n * USDC }],
+    config: { authority: DEMO.platform.toBase58(), treasury: DEMO.treasury.toBase58(), feeBps: 80, paused: false, mint: USDC_DEVNET_MINT.toBase58() },
+    employers: [
+      { owner, name: "Acme Corp", mint: USDC_DEVNET_MINT.toBase58(), tzOffsetMinutes: -180, totalDeposited: 1000n * USDC, totalAllocated: 350n * USDC, approved: true },
+      // Pedido pendente, para o painel da plataforma ter o que aprovar
+      { owner: DEMO.employer2.toBase58(), name: "Globex Ltda", mint: USDC_DEVNET_MINT.toBase58(), tzOffsetMinutes: -180, totalDeposited: 0n, totalAllocated: 0n, approved: false },
+    ],
     employees: [employee(DEMO.employee, 200, 40, 60), employee(DEMO.employee2, 150, 35, 50, 11 * 60, 15 * 60)],
     merchants: [
       { wallet: DEMO.merchant.toBase58(), name: "Cantina da Vila", category: "restaurant", active: true },
@@ -118,6 +123,7 @@ function toEmployer(r: EmployerRow): EmployerAccount {
     address, owner: pk(r.owner), name: r.name, mint: pk(r.mint),
     vault: PublicKey.findProgramAddressSync([Buffer.from("mock-vault"), address.toBuffer()], address)[0],
     tzOffsetMinutes: r.tzOffsetMinutes, totalDeposited: r.totalDeposited, totalAllocated: r.totalAllocated,
+    approved: r.approved,
   };
 }
 
@@ -132,6 +138,21 @@ function checkName(name: string) {
 function checkWindow(start: number, end: number) {
   if (start === 0 && end === 0) return;
   if (start < 0 || end > 1440 || start >= end) throw new TabbitError("InvalidWindow");
+}
+
+function applyUpsert(s: Store, emp: EmployerRow, input: UpsertEmployeeInput) {
+  if (input.maxPerMeal <= 0n || input.dailyCap <= 0n) throw new TabbitError("InvalidAmount");
+  const start = input.windowStartMin ?? 0;
+  const end = input.windowEndMin ?? 0;
+  checkWindow(start, end);
+  const wallet = input.wallet.toBase58();
+  const row = s.employees.find((e) => e.employerOwner === emp.owner && e.wallet === wallet);
+  const allocated = emp.totalAllocated - (row?.balance ?? 0n) + input.balance;
+  if (allocated > emp.totalDeposited) throw new TabbitError("OverAllocated");
+  emp.totalAllocated = allocated;
+  const fields = { balance: input.balance, maxPerMeal: input.maxPerMeal, dailyCap: input.dailyCap, windowStartMin: start, windowEndMin: end, active: true };
+  if (row) Object.assign(row, fields);
+  else s.employees.push({ employerOwner: emp.owner, wallet, spentToday: 0n, lastSpendDay: 0, ...fields });
 }
 
 export interface MockClientOptions {
@@ -172,7 +193,7 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
     return Promise.resolve(fakeSignature());
   };
   // Erros saem como Promise rejeitada, igual ao cliente real.
-  const tx = (fn: () => Promise<string>) => {
+  const tx = <T,>(fn: () => Promise<T>): Promise<T> => {
     try {
       return fn();
     } catch (e) {
@@ -183,11 +204,14 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
   return {
     async getConfig(): Promise<ConfigAccount> {
       const c = load().config;
-      return { authority: pk(c.authority), treasury: pk(c.treasury), feeBps: c.feeBps, paused: c.paused };
+      return { authority: pk(c.authority), treasury: pk(c.treasury), feeBps: c.feeBps, paused: c.paused, mint: pk(c.mint) };
     },
     async getEmployer(owner) {
       const row = load().employers.find((e) => e.owner === owner.toBase58());
       return row ? toEmployer(row) : null;
+    },
+    async listEmployers() {
+      return load().employers.map(toEmployer);
     },
     async listEmployees(employerOwner) {
       return load().employees.filter((e) => e.employerOwner === employerOwner.toBase58()).map(toEmployee);
@@ -226,13 +250,16 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
         const owner = requireSigner();
         checkName(name);
         if (s.employers.some((e) => e.owner === owner)) throw new Error("Company already registered for this wallet");
-        s.employers.push({ owner, name, mint: mint.toBase58(), tzOffsetMinutes, totalDeposited: 0n, totalAllocated: 0n });
+        const official = s.config.mint;
+        if (mint && mint.toBase58() !== official) throw new TabbitError("InvalidMint");
+        s.employers.push({ owner, name, mint: official, tzOffsetMinutes, totalDeposited: 0n, totalAllocated: 0n, approved: false });
         return done(s);
       }),
     deposit: (amount) =>
       tx(() => {
         const s = load();
         const emp = myEmployer(s);
+        if (!emp.approved) throw new TabbitError("EmployerNotApproved");
         if (amount <= 0n) throw new TabbitError("InvalidAmount");
         emp.totalDeposited += amount;
         return done(s);
@@ -240,18 +267,35 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
     upsertEmployee: (input: UpsertEmployeeInput) =>
       tx(() => {
         const s = load();
-        const emp = myEmployer(s);
-        const start = input.windowStartMin ?? 0;
-        const end = input.windowEndMin ?? 0;
-        checkWindow(start, end);
-        const wallet = input.wallet.toBase58();
-        const row = s.employees.find((e) => e.employerOwner === emp.owner && e.wallet === wallet);
-        const allocated = emp.totalAllocated - (row?.balance ?? 0n) + input.balance;
-        if (allocated > emp.totalDeposited) throw new TabbitError("OverAllocated");
-        emp.totalAllocated = allocated;
-        const fields = { balance: input.balance, maxPerMeal: input.maxPerMeal, dailyCap: input.dailyCap, windowStartMin: start, windowEndMin: end, active: true };
-        if (row) Object.assign(row, fields);
-        else s.employees.push({ employerOwner: emp.owner, wallet, spentToday: 0n, lastSpendDay: 0, ...fields });
+        applyUpsert(s, myEmployer(s), input);
+        return done(s);
+      }),
+    upsertEmployees: (inputs: UpsertEmployeeInput[]) =>
+      tx(async () => {
+        // Valida tudo numa cópia antes de gravar: ou entra a planilha inteira, ou nada
+        const s = load();
+        const draft = JSON.parse(JSON.stringify(s, replacer), reviver) as Store;
+        const emp = myEmployer(draft);
+        inputs.forEach((input) => applyUpsert(draft, emp, input));
+        store = draft;
+        save(draft);
+        return Array.from({ length: Math.ceil(inputs.length / 8) }, fakeSignature);
+      }),
+    setEmployerApproved: (owner, approved) =>
+      tx(() => {
+        const s = load();
+        requireAuthority(s);
+        const row = s.employers.find((e) => e.owner === owner.toBase58());
+        if (!row) throw new Error("Company not found");
+        if (approved && row.mint !== s.config.mint) throw new TabbitError("InvalidMint");
+        row.approved = approved;
+        return done(s);
+      }),
+    setPaused: (paused) =>
+      tx(() => {
+        const s = load();
+        requireAuthority(s);
+        s.config.paused = paused;
         return done(s);
       }),
     revokeEmployee: (wallet) =>
@@ -308,6 +352,7 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
         if (amount > row.maxPerMeal) throw new TabbitError("ExceedsMaxPerMeal");
         if (amount > row.balance) throw new TabbitError("InsufficientBalance");
         const emp = s.employers.find((e) => e.owner === row.employerOwner)!;
+        if (!emp.approved) throw new TabbitError("EmployerNotApproved");
         const t = now();
         const today = localDay(t, emp.tzOffsetMinutes);
         if (row.lastSpendDay !== today) {

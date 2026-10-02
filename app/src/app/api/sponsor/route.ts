@@ -32,7 +32,9 @@ const fail = (status: number, error: string, logs?: string[]) => Response.json({
 export async function GET() {
   const kp = loadSponsor();
   if (!kp) return fail(503, "Sponsor not configured");
-  return Response.json({ publicKey: kp.publicKey.toBase58() });
+  // Saldo em SOL para o painel da plataforma avisar antes de acabar
+  const lamports = await new Connection(RPC_URL, "confirmed").getBalance(kp.publicKey).catch(() => null);
+  return Response.json({ publicKey: kp.publicKey.toBase58(), lamports });
 }
 
 export async function POST(request: Request) {

@@ -13,6 +13,8 @@ export const ERROR_MESSAGES: Record<TabbitErrorCode, string> = {
   InvalidAmount: "Enter an amount greater than zero",
   NameTooLong: "Name is too long (max 32 characters)",
   InvalidWindow: "Invalid meal time window",
+  EmployerNotApproved: "This company is waiting for Tabbit approval",
+  InvalidMint: "This token is not accepted by Tabbit",
 };
 
 /** Mensagem amigável para qualquer erro vindo do cliente (TabbitError, carteira, rede). */

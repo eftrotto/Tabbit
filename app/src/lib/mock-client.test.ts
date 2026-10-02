@@ -74,8 +74,9 @@ test("employer: over-allocation, withdraw limit, window validation, register", a
 
   const newCo = createMockClient(Keypair.generate().publicKey);
   await assert.rejects(newCo.deposit(U), code("Unauthorized"));
-  await assert.rejects(newCo.registerEmployer({ name: "x".repeat(33), mint: DEMO.merchant, tzOffsetMinutes: 0 }), code("NameTooLong"));
-  await newCo.registerEmployer({ name: "NewCo", mint: DEMO.merchant, tzOffsetMinutes: 0 });
+  await assert.rejects(newCo.registerEmployer({ name: "x".repeat(33), tzOffsetMinutes: 0 }), code("NameTooLong"));
+  await newCo.registerEmployer({ name: "NewCo", tzOffsetMinutes: 0 });
+  await createMockClient(DEMO.platform).setEmployerApproved((await newCo.listEmployers()).at(-1)!.owner, true);
   await newCo.deposit(5n * U);
   await assert.rejects(createMockClient(null).deposit(U), code("Unauthorized"));
 });
@@ -89,4 +90,55 @@ test("currency parsing round-trips", () => {
   assert.equal(parseUsdc("abc"), null);
   assert.equal(usdcToInput(12_500_000n), "12.5");
   assert.equal(usdcToInput(40n * U), "40");
+});
+
+test("company starts pending: cannot deposit until the platform approves", async () => {
+  resetMockStore();
+  const boss = Keypair.generate().publicKey;
+  const asBoss = createMockClient(boss);
+  await asBoss.registerEmployer({ name: "Newco", tzOffsetMinutes: -180 });
+  assert.equal((await asBoss.getEmployer(boss))!.approved, false);
+  await assert.rejects(asBoss.deposit(10n * U), code("EmployerNotApproved"));
+  await assert.rejects(asBoss.setEmployerApproved(boss, true), code("Unauthorized"));
+  await createMockClient(DEMO.platform).setEmployerApproved(boss, true);
+  await asBoss.deposit(10n * U);
+  assert.equal((await asBoss.getEmployer(boss))!.totalDeposited, 10n * U);
+});
+
+test("company with its own token is rejected", async () => {
+  resetMockStore();
+  const asBoss = createMockClient(Keypair.generate().publicKey);
+  await assert.rejects(
+    asBoss.registerEmployer({ name: "Scam", mint: Keypair.generate().publicKey, tzOffsetMinutes: 0 }),
+    code("InvalidMint")
+  );
+});
+
+test("suspended company cannot pay", async () => {
+  resetMockStore();
+  await createMockClient(DEMO.platform).setEmployerApproved(DEMO.employer, false);
+  const joao = createMockClient(DEMO.employee, { now: () => NOON_BRT });
+  await assert.rejects(joao.pay({ merchant: DEMO.merchant, amount: 1n * U }), code("EmployerNotApproved"));
+});
+
+test("batch upsert is all-or-nothing", async () => {
+  resetMockStore();
+  const acme = createMockClient(DEMO.employer);
+  const a = Keypair.generate().publicKey;
+  const b = Keypair.generate().publicKey;
+  // 650 livres: a cabe, a + b não
+  await assert.rejects(
+    acme.upsertEmployees([
+      { wallet: a, balance: 400n * U, maxPerMeal: U, dailyCap: U },
+      { wallet: b, balance: 400n * U, maxPerMeal: U, dailyCap: U },
+    ]),
+    code("OverAllocated")
+  );
+  assert.equal((await acme.listEmployees(DEMO.employer)).length, 2);
+  const sigs = await acme.upsertEmployees([
+    { wallet: a, balance: 100n * U, maxPerMeal: U, dailyCap: U },
+    { wallet: b, balance: 100n * U, maxPerMeal: U, dailyCap: U },
+  ]);
+  assert.equal(sigs.length, 1);
+  assert.equal((await acme.listEmployees(DEMO.employer)).length, 4);
 });

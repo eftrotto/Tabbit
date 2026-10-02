@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/employer", label: "Employer" },
   { href: "/employee", label: "Employee" },
   { href: "/merchant", label: "Restaurant" },
+  { href: "/transparency", label: "Network" },
 ];
 
 export function Logo({ className = "h-8 w-8" }: { className?: string }) {
@@ -57,6 +59,13 @@ export function Header() {
   const isPlatform = useIsPlatform();
   const nav = isPlatform ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
   const { currency, setCurrency } = useCurrency();
+  // No celular a barra rola de lado: mantém a aba atual à vista
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = navRef.current?.querySelector<HTMLElement>("[aria-current=page]");
+    const bar = navRef.current;
+    if (el && bar) bar.scrollLeft = el.offsetLeft - (bar.clientWidth - el.offsetWidth) / 2;
+  }, [path, nav.length]);
   return (
     <header className="sticky top-0 z-40 px-3 pt-3">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-ink/[0.07] bg-paper/75 px-3 py-2 shadow-[0_8px_30px_-12px_rgba(11,43,43,0.15)] backdrop-blur-xl sm:px-4">
@@ -64,11 +73,11 @@ export function Header() {
           <Logo className="h-8 w-auto" />
           <Wordmark />
         </Link>
-        <nav className="order-last flex w-full gap-1 rounded-xl bg-ink/[0.05] p-1 text-sm sm:order-none sm:w-auto">
+        <nav ref={navRef} className="order-last flex w-full gap-1 overflow-x-auto rounded-xl bg-ink/[0.05] p-1 text-sm [scrollbar-width:none] sm:order-none sm:w-auto">
           {nav.map((n) => {
             const active = path.startsWith(n.href) || (n.href === "/employee" && path.startsWith("/pay"));
             return (
-              <Link key={n.href} href={n.href} className={`relative flex-1 rounded-lg px-3 py-1.5 text-center font-semibold transition sm:flex-none ${active ? "text-brand" : "text-ink/60 hover:text-ink"}`}>
+              <Link key={n.href} href={n.href} aria-current={active ? "page" : undefined} className={`relative flex-1 shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-center font-semibold transition sm:flex-none sm:px-3 ${active ? "text-brand" : "text-ink/60 hover:text-ink"}`}>
                 {active && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-lg bg-ink" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
                 <span className="relative">{n.label}</span>
               </Link>

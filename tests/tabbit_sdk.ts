@@ -2,9 +2,9 @@
 // Roda depois de tests/tabbit.ts (que inicializa a Config).
 import * as anchor from "@coral-xyz/anchor";
 import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { Keypair, LAMPORTS_PER_SOL, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import { expect } from "chai";
-import { createTabbitClient, TabbitError } from "../sdk/src";
+import { createTabbitClient, PROGRAM_ID, SponsorRejected, TabbitError, validateSponsoredPay } from "../sdk/src";
 import type { AnchorWallet } from "../sdk/src";
 
 function walletOf(kp: Keypair): AnchorWallet {
@@ -89,5 +89,51 @@ describe("sdk", () => {
       expect(e).to.be.instanceOf(TabbitError);
       expect((e as TabbitError).code).to.equal("ExceedsMaxPerMeal");
     }
+  });
+
+  it("fee payer: funcionário com 0 SOL paga via patrocinador, que recusa transações fora do pay", async () => {
+    const sponsor = Keypair.generate();
+    const sig = await connection.requestAirdrop(sponsor.publicKey, LAMPORTS_PER_SOL);
+    await connection.confirmTransaction(sig, "confirmed");
+
+    // Mesmo papel da rota /api/sponsor do app: valida, co-assina e envia
+    const sponsorSide = {
+      publicKey: sponsor.publicKey,
+      async signAndSend(tx: Transaction) {
+        validateSponsoredPay(tx, sponsor.publicKey, PROGRAM_ID);
+        tx.partialSign(sponsor);
+        const s = await connection.sendRawTransaction(tx.serialize());
+        await connection.confirmTransaction(s, "confirmed");
+        return s;
+      },
+    };
+
+    const bia = Keypair.generate(); // nunca recebe SOL
+    const asBoss = createTabbitClient({ connection, wallet: walletOf(boss) });
+    await asBoss.upsertEmployee({ wallet: bia.publicKey, balance: U(20), maxPerMeal: U(10), dailyCap: U(15) });
+
+    const asBia = createTabbitClient({ connection, wallet: walletOf(bia), sponsor: sponsorSide });
+    const sponsorBefore = await connection.getBalance(sponsor.publicKey);
+    await asBia.pay({ merchant: bistro.publicKey, amount: U(5) });
+
+    expect(await connection.getBalance(bia.publicKey)).to.equal(0);
+    expect(await connection.getBalance(sponsor.publicKey)).to.be.lessThan(sponsorBefore);
+    expect((await asBia.getEmployeeByWallet(bia.publicKey))!.balance).to.equal(U(15));
+
+    // Uma instrução a mais tirando SOL do patrocinador: recusada antes de assinar
+    let captured: Transaction | undefined;
+    const capture = createTabbitClient({
+      connection,
+      wallet: walletOf(bia),
+      sponsor: { publicKey: sponsor.publicKey, signAndSend: async (tx) => ((captured = tx), "") },
+    });
+    await capture.pay({ merchant: bistro.publicKey, amount: U(1) });
+    const { blockhash } = await connection.getLatestBlockhash();
+    const drain = new Transaction({ feePayer: sponsor.publicKey, recentBlockhash: blockhash }).add(
+      ...captured!.instructions,
+      SystemProgram.transfer({ fromPubkey: sponsor.publicKey, toPubkey: bia.publicKey, lamports: 1_000_000 })
+    );
+    drain.partialSign(bia);
+    expect(() => validateSponsoredPay(drain, sponsor.publicKey, PROGRAM_ID)).to.throw(SponsorRejected);
   });
 });

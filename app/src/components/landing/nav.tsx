@@ -8,6 +8,7 @@ const LINKS = [
   { href: "#how", label: "How it works" },
   { href: "#rules", label: "Rules" },
   { href: "#restaurants", label: "Restaurants" },
+  { href: "/transparency", label: "Live network" },
 ];
 
 // Transparente sobre o hero escuro; vira vidro claro depois de rolar.

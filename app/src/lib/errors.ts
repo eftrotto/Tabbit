@@ -23,5 +23,8 @@ export function friendlyError(e: unknown): string {
   const code = (e as { code?: unknown })?.code;
   if (typeof code === "string" && code in ERROR_MESSAGES) return ERROR_MESSAGES[code as TabbitErrorCode];
   if (e instanceof Error && /reject/i.test(e.message)) return "Transaction cancelled in wallet";
+  // Carteira que nunca recebeu SOL não existe na rede: não tem como pagar a taxa
+  if (e instanceof Error && /AccountNotFound|insufficient (funds|lamports)|no record of a prior credit/i.test(e.message))
+    return "Your wallet has no SOL to pay the network fee. On devnet, get free SOL at faucet.solana.com and try again.";
   return e instanceof Error ? e.message : "Something went wrong";
 }

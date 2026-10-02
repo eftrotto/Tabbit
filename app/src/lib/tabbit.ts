@@ -5,6 +5,7 @@ import { clusterApiUrl, PublicKey } from "@solana/web3.js";
 import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { createTabbitClient, USDC_DEVNET_MINT, type TabbitClient } from "@tabbit/sdk";
 import { createMockClient, DEMO } from "./mock-client";
+import { fetchSponsorKey, sponsorFor } from "./sponsor";
 
 export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== "false";
 export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || clusterApiUrl("devnet");
@@ -31,13 +32,30 @@ export interface TabbitContext {
 export function useTabbit(role: Role): TabbitContext {
   const { connection } = useConnection();
   const wallet = useAnchorWallet();
+  const sponsorKey = useSponsorKey(role === "employee");
   return useMemo(() => {
     if (!USE_MOCK) {
-      return { client: createTabbitClient({ connection, wallet }), actor: wallet?.publicKey ?? null, isMock: false, isDemoPersona: false };
+      // Só o funcionário é patrocinado: empresa e plataforma pagam as próprias taxas
+      const sponsor = sponsorKey ? sponsorFor(sponsorKey) : undefined;
+      return { client: createTabbitClient({ connection, wallet, sponsor }), actor: wallet?.publicKey ?? null, isMock: false, isDemoPersona: false };
     }
     const actor = wallet?.publicKey ?? PERSONA[role];
     return { client: createMockClient(actor), actor, isMock: true, isDemoPersona: !wallet };
-  }, [connection, wallet, role]);
+  }, [connection, wallet, role, sponsorKey]);
+}
+
+/** Chave do fee payer (null no mock, fora da visão do funcionário ou sem patrocinador no servidor). */
+function useSponsorKey(enabled: boolean): PublicKey | null {
+  const [key, setKey] = useState<PublicKey | null>(null);
+  useEffect(() => {
+    if (USE_MOCK || !enabled) return;
+    let alive = true;
+    fetchSponsorKey().then((k) => alive && setKey(k));
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+  return enabled ? key : null;
 }
 
 /** Carrega dados assíncronos. `loading` só no primeiro carregamento; `reload()` recarrega mantendo os dados atuais. */

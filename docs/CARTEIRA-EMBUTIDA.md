@@ -16,7 +16,9 @@ Limite de tempo: **2 dias**. Se o Privy travar até lá, a demo segue com Phanto
 - **Hoje o checkout NÃO é gasless.** Em `sdk/src/client.ts`, `send()` faz `tx.feePayer = me()` e `pay()` cria as contas de token do restaurante e da tesouraria com o funcionário pagando o aluguel. Uma carteira embutida nasce com 0 SOL, então **sem a parte 1 o pagamento falha**.
 - **`sdk/src/types.ts` (o contrato) não muda.** A opção nova entra em `CreateTabbitClientOptions`, em `client.ts`.
 
-## Parte 1: fee payer (fazer primeiro, ~1 dia)
+## Parte 1: fee payer (feito em 02/10, branch `a/fee-payer`)
+
+> Implementado: `sdk/src/sponsor.ts` (`validateSponsoredPay`), opção `sponsor` em `createTabbitClient`, rota `app/src/app/api/sponsor/route.ts` e `app/src/lib/sponsor.ts`. O app só usa o patrocinador na visão do funcionário e só se `GET /api/sponsor` responder (sem `SPONSOR_SECRET_KEY`, tudo segue como antes). Rate limit: 5 pagamentos por minuto por funcionário, em memória (vale por instância do servidor).
 
 Vale até com Phantom e cumpre a promessa "gasless" do pitch.
 
@@ -116,8 +118,8 @@ O Privy é grande. Carregar o provider só no grupo `(app)` (ou com `dynamic`) p
 
 ## Pronto quando
 
-- [ ] Funcionário com 0 SOL paga com Phantom via patrocinador (parte 1)
-- [ ] Rota recusa transação que não seja `pay` do Tabbit
+- [x] Funcionário com 0 SOL paga com Phantom via patrocinador (parte 1) — testado na devnet em 02/10
+- [x] Rota recusa transação que não seja `pay` do Tabbit
 - [ ] Funcionário entra com Google no celular, abre o link do QR no navegador comum e paga
 - [ ] `/employer` e `/merchant` continuam só com Phantom
 - [ ] Mock continua funcionando sem Privy

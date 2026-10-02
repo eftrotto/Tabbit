@@ -25,9 +25,18 @@ import {
 } from "./types";
 import type { AnchorWallet } from "./wallet";
 
+/** Patrocinador (fee payer): paga taxa e aluguel em `pay`, para o funcionário não precisar de SOL. */
+export interface TabbitSponsor {
+  publicKey: PublicKey;
+  /** Recebe a transação já assinada pelo funcionário, co-assina, envia e devolve a assinatura. */
+  signAndSend(tx: Transaction): Promise<TransactionSignature>;
+}
+
 export interface CreateTabbitClientOptions {
   connection: Connection;
   wallet?: AnchorWallet; // sem carteira = só leitura
+  /** Quando definido, o patrocinador paga taxa e aluguel em `pay`. */
+  sponsor?: TabbitSponsor;
 }
 
 const ERROR_CODES: TabbitErrorCode[] = [
@@ -199,6 +208,16 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
   // Simula antes de pedir a assinatura: se o programa recusar (limite, saldo, horário...),
   // o app recebe o TabbitError na hora e a carteira nem abre o aviso de "transação revertida".
+  async function simulate(tx: Transaction) {
+    const sim = await connection.simulateTransaction(tx);
+    if (sim.value.err) {
+      throw (
+        AnchorError.parse(sim.value.logs ?? []) ??
+        new Error(`Transaction simulation failed: ${JSON.stringify(sim.value.err)}\n${(sim.value.logs ?? []).join("\n")}`)
+      );
+    }
+  }
+
   async function send(builder: {
     transaction(): Promise<Transaction>;
     rpc(): Promise<TransactionSignature>;
@@ -206,14 +225,25 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     try {
       const tx = await builder.transaction();
       tx.feePayer = me();
-      const sim = await connection.simulateTransaction(tx);
-      if (sim.value.err) {
-        throw (
-          AnchorError.parse(sim.value.logs ?? []) ??
-          new Error(`Transaction simulation failed: ${JSON.stringify(sim.value.err)}\n${(sim.value.logs ?? []).join("\n")}`)
-        );
-      }
+      await simulate(tx);
       return await builder.rpc();
+    } catch (e) {
+      mapError(e);
+    }
+  }
+
+  // Igual ao send, mas o patrocinador paga a taxa: o funcionário só assina, e o patrocinador co-assina e envia.
+  async function sendSponsored(
+    builder: { transaction(): Promise<Transaction> },
+    sponsor: TabbitSponsor
+  ): Promise<TransactionSignature> {
+    try {
+      const tx = await builder.transaction();
+      tx.feePayer = sponsor.publicKey;
+      await simulate(tx);
+      tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+      const signed = await opts.wallet!.signTransaction(tx);
+      return await sponsor.signAndSend(signed);
     } catch (e) {
       mapError(e);
     }
@@ -424,27 +454,28 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const merchantToken = getAssociatedTokenAddressSync(employer.mint, merchant);
       const treasuryToken = getAssociatedTokenAddressSync(employer.mint, config.treasury);
 
-      // Cria as contas de token do restaurante e da tesouraria se ainda não existirem
+      // Cria as contas de token do restaurante e da tesouraria se ainda não existirem.
+      // Com patrocinador, é ele quem paga o aluguel; sem, o próprio funcionário.
+      const funder = opts.sponsor?.publicKey ?? payer;
       const pre: TransactionInstruction[] = [
-        createAssociatedTokenAccountIdempotentInstruction(payer, merchantToken, merchant, employer.mint),
-        createAssociatedTokenAccountIdempotentInstruction(payer, treasuryToken, config.treasury, employer.mint),
+        createAssociatedTokenAccountIdempotentInstruction(funder, merchantToken, merchant, employer.mint),
+        createAssociatedTokenAccountIdempotentInstruction(funder, treasuryToken, config.treasury, employer.mint),
       ];
 
-      return send(
-        program.methods
-          .pay(toBN(amount))
-          .accountsPartial({
-            payer,
-            config: configPda,
-            employer: emp.employer,
-            employee: emp.address,
-            merchant: findMerchantPda(merchant, program.programId),
-            vault: employer.vault,
-            merchantToken,
-            treasuryToken,
-          })
-          .preInstructions(pre)
-      );
+      const builder = program.methods
+        .pay(toBN(amount))
+        .accountsPartial({
+          payer,
+          config: configPda,
+          employer: emp.employer,
+          employee: emp.address,
+          merchant: findMerchantPda(merchant, program.programId),
+          vault: employer.vault,
+          merchantToken,
+          treasuryToken,
+        })
+        .preInstructions(pre);
+      return opts.sponsor ? sendSponsored(builder, opts.sponsor) : send(builder);
     },
   };
 }

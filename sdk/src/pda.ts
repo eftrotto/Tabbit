@@ -19,3 +19,7 @@ export function findEmployeePda(employer: PublicKey, wallet: PublicKey, programI
 export function findMerchantPda(wallet: PublicKey, programId = PROGRAM_ID): PublicKey {
   return PublicKey.findProgramAddressSync([Buffer.from(SEEDS.merchant), wallet.toBuffer()], programId)[0];
 }
+
+export function findApprovalPda(employer: PublicKey, programId = PROGRAM_ID): PublicKey {
+  return PublicKey.findProgramAddressSync([Buffer.from(SEEDS.approval), employer.toBuffer()], programId)[0];
+}

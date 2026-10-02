@@ -1,7 +1,7 @@
 // Testa o SDK (@tabbit/sdk) de ponta a ponta contra o validador local.
 // Roda depois de tests/tabbit.ts (que inicializa a Config).
 import * as anchor from "@coral-xyz/anchor";
-import { createMint, getOrCreateAssociatedTokenAccount, mintTo, getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { getOrCreateAssociatedTokenAccount, mintTo, getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, VersionedTransaction } from "@solana/web3.js";
 import { expect } from "chai";
 import { createTabbitClient, PROGRAM_ID, SponsorRejected, TabbitError, validateSponsoredPay } from "../sdk/src";
@@ -37,7 +37,8 @@ describe("sdk", () => {
       const sig = await connection.requestAirdrop(kp.publicKey, 2 * LAMPORTS_PER_SOL);
       await connection.confirmTransaction(sig, "confirmed");
     }
-    mint = await createMint(connection, platform.payer, platform.publicKey, null, 6);
+    // O programa só aceita o token oficial da Config (criado em tests/tabbit.ts, a plataforma emite)
+    mint = (await createTabbitClient({ connection }).getConfig()).mint;
     const bossToken = await getOrCreateAssociatedTokenAccount(connection, platform.payer, mint, boss.publicKey);
     await mintTo(connection, platform.payer, mint, bossToken.address, platform.publicKey, Number(U(500)));
   });
@@ -48,7 +49,16 @@ describe("sdk", () => {
     const asAna = createTabbitClient({ connection, wallet: walletOf(ana) });
     const readOnly = createTabbitClient({ connection });
 
-    await asBoss.registerEmployer({ name: "Globex", mint, tzOffsetMinutes: -180 });
+    await asBoss.registerEmployer({ name: "Globex", tzOffsetMinutes: -180 });
+    expect((await readOnly.getEmployer(boss.publicKey))!.approved).to.equal(false);
+    try {
+      await asBoss.deposit(U(200));
+      expect.fail("empresa pendente não deveria depositar");
+    } catch (e) {
+      expect((e as TabbitError).code).to.equal("EmployerNotApproved");
+    }
+    await asPlatform.setEmployerApproved(boss.publicKey, true);
+    expect((await readOnly.listEmployers()).find((e) => e.owner.equals(boss.publicKey))!.approved).to.equal(true);
     await asBoss.deposit(U(200));
     await asPlatform.registerMerchant({ wallet: bistro.publicKey, name: "Bistro 22", category: "restaurant" });
     await asBoss.upsertEmployee({ wallet: ana.publicKey, balance: U(100), maxPerMeal: U(50), dailyCap: U(80) });
@@ -89,6 +99,15 @@ describe("sdk", () => {
       expect(e).to.be.instanceOf(TabbitError);
       expect((e as TabbitError).code).to.equal("ExceedsMaxPerMeal");
     }
+  });
+
+  it("cadastra vários funcionários de uma vez (planilha), em poucas transações", async () => {
+    const asBoss = createTabbitClient({ connection, wallet: walletOf(boss) });
+    const team = Array.from({ length: 10 }, () => Keypair.generate().publicKey);
+    const sigs = await asBoss.upsertEmployees(team.map((wallet) => ({ wallet, balance: U(1), maxPerMeal: U(1), dailyCap: U(1) })));
+    expect(sigs.length).to.equal(2); // 8 + 2
+    const all = await asBoss.listEmployees(boss.publicKey);
+    for (const w of team) expect(all.some((e) => e.wallet.equals(w))).to.equal(true);
   });
 
   it("fee payer: funcionário com 0 SOL paga via patrocinador, que recusa transações fora do pay", async () => {

@@ -4,13 +4,13 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { Keypair, PublicKey } from "@solana/web3.js";
-import type { Connection, Transaction, TransactionInstruction, TransactionSignature } from "@solana/web3.js";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import type { Connection, TransactionInstruction, TransactionSignature } from "@solana/web3.js";
 
 import { CATEGORY_CODES } from "./constants";
 import idl from "./idl/tabbit.json";
 import type { Tabbit } from "./idl/tabbit";
-import { findConfigPda, findEmployeePda, findEmployerPda, findMerchantPda } from "./pda";
+import { findApprovalPda, findConfigPda, findEmployeePda, findEmployerPda, findMerchantPda } from "./pda";
 import {
   TabbitError,
   type Category,
@@ -52,6 +52,8 @@ const ERROR_CODES: TabbitErrorCode[] = [
   "InvalidAmount",
   "NameTooLong",
   "InvalidWindow",
+  "EmployerNotApproved",
+  "InvalidMint",
 ];
 
 const CATEGORY_BY_CODE: Category[] = ["restaurant", "cafe", "grocery", "other"];
@@ -59,6 +61,8 @@ const CATEGORY_BY_CODE: Category[] = ["restaurant", "cafe", "grocery", "other"];
 // Offsets (8 bytes de discriminator + campos) usados nos filtros de getProgramAccounts
 const EMPLOYEE_EMPLOYER_OFFSET = 8;
 const EMPLOYEE_WALLET_OFFSET = 8 + 32;
+
+const UPSERTS_PER_TX = 8;
 
 const toBig = (v: BN): bigint => BigInt(v.toString());
 const toBN = (v: bigint): BN => new BN(v.toString());
@@ -104,8 +108,9 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
   // ---------- conversores ----------
 
-  const toEmployer = (address: PublicKey, a: any): EmployerAccount => ({
+  const toEmployer = (address: PublicKey, a: any, approved: boolean): EmployerAccount => ({
     address,
+    approved,
     owner: a.owner,
     name: a.name,
     mint: a.mint,
@@ -208,6 +213,29 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
   // Simula antes de pedir a assinatura: se o programa recusar (limite, saldo, horário...),
   // o app recebe o TabbitError na hora e a carteira nem abre o aviso de "transação revertida".
+  function upsertBuilder(owner: PublicKey, employer: PublicKey, input: UpsertEmployeeInput) {
+    return program.methods
+      .upsertEmployee(
+        input.wallet,
+        toBN(input.balance),
+        toBN(input.maxPerMeal),
+        toBN(input.dailyCap),
+        input.windowStartMin ?? 0,
+        input.windowEndMin ?? 0
+      )
+      .accountsPartial({ owner, employer, employee: findEmployeePda(employer, input.wallet, program.programId) });
+  }
+
+  async function isApproved(employer: PublicKey): Promise<boolean> {
+    const a = await program.account.employerApproval.fetchNullable(findApprovalPda(employer, program.programId));
+    return !!a?.approved;
+  }
+
+  // Sem aprovação a conta ["approval", empresa] nem existe e o erro on-chain seria genérico
+  async function requireApproved(employer: PublicKey) {
+    if (!(await isApproved(employer))) throw new TabbitError("EmployerNotApproved", "This company is not approved by Tabbit yet");
+  }
+
   async function simulate(tx: Transaction) {
     const sim = await connection.simulateTransaction(tx);
     if (sim.value.err) {
@@ -254,13 +282,19 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
     async getConfig(): Promise<ConfigAccount> {
       const c = await program.account.config.fetch(configPda);
-      return { authority: c.authority, treasury: c.treasury, feeBps: c.feeBps, paused: c.paused };
+      return { authority: c.authority, treasury: c.treasury, feeBps: c.feeBps, paused: c.paused, mint: c.mint };
     },
 
     async getEmployer(owner) {
       const address = findEmployerPda(owner, program.programId);
-      const a = await program.account.employer.fetchNullable(address);
-      return a ? toEmployer(address, a) : null;
+      const [a, approved] = await Promise.all([program.account.employer.fetchNullable(address), isApproved(address)]);
+      return a ? toEmployer(address, a, approved) : null;
+    },
+
+    async listEmployers() {
+      const [rows, approvals] = await Promise.all([program.account.employer.all(), program.account.employerApproval.all()]);
+      const ok = new Set(approvals.filter((r) => r.account.approved).map((r) => r.account.employer.toBase58()));
+      return rows.map((r) => toEmployer(r.publicKey, r.account, ok.has(r.publicKey.toBase58())));
     },
 
     async listEmployees(employerOwner) {
@@ -334,9 +368,10 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
     // ---------- escrita ----------
 
-    registerEmployer({ name, mint, tzOffsetMinutes }) {
+    async registerEmployer({ name, mint: requested, tzOffsetMinutes }) {
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
+      const mint = requested ?? (await program.account.config.fetch(configPda)).mint;
       return send(
         program.methods
           .registerEmployer(name, tzOffsetMinutes)
@@ -353,6 +388,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
       const e = await program.account.employer.fetch(employer);
+      await requireApproved(employer);
       return send(
         program.methods
           .deposit(toBN(amount))
@@ -365,25 +401,40 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       );
     },
 
-    upsertEmployee(input: UpsertEmployeeInput) {
+    async upsertEmployees(inputs: UpsertEmployeeInput[]) {
       const owner = me();
       const employer = findEmployerPda(owner, program.programId);
-      return send(
-        program.methods
-          .upsertEmployee(
-            input.wallet,
-            toBN(input.balance),
-            toBN(input.maxPerMeal),
-            toBN(input.dailyCap),
-            input.windowStartMin ?? 0,
-            input.windowEndMin ?? 0
-          )
-          .accountsPartial({
-            owner,
-            employer,
-            employee: findEmployeePda(employer, input.wallet, program.programId),
-          })
-      );
+      if (inputs.length === 0) return [];
+      try {
+        const ixs = await Promise.all(
+          inputs.map((input) => upsertBuilder(owner, employer, input).instruction())
+        );
+        // ~8 por transação cabe no limite de 1232 bytes
+        const txs: Transaction[] = [];
+        for (let i = 0; i < ixs.length; i += UPSERTS_PER_TX) txs.push(new Transaction().add(...ixs.slice(i, i + UPSERTS_PER_TX)));
+        const { blockhash } = await connection.getLatestBlockhash("confirmed");
+        for (const tx of txs) {
+          tx.feePayer = owner;
+          tx.recentBlockhash = blockhash;
+        }
+        await simulate(txs[0]);
+        const signed = await opts.wallet!.signAllTransactions(txs);
+        const sigs: TransactionSignature[] = [];
+        // Em sequência: o total alocado de uma depende da anterior
+        for (const tx of signed) {
+          const sig = await connection.sendRawTransaction(tx.serialize());
+          await connection.confirmTransaction(sig, "confirmed");
+          sigs.push(sig);
+        }
+        return sigs;
+      } catch (e) {
+        mapError(e);
+      }
+    },
+
+    upsertEmployee(input: UpsertEmployeeInput) {
+      const owner = me();
+      return send(upsertBuilder(owner, findEmployerPda(owner, program.programId), input));
     },
 
     revokeEmployee(wallet) {
@@ -429,6 +480,20 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       );
     },
 
+    setEmployerApproved(owner, approved) {
+      const authority = me();
+      return send(
+        program.methods
+          .setEmployerApproved(approved)
+          .accountsPartial({ authority, config: configPda, employer: findEmployerPda(owner, program.programId) })
+      );
+    },
+
+    setPaused(paused) {
+      const authority = me();
+      return send(program.methods.setPaused(paused).accountsPartial({ authority, config: configPda }));
+    },
+
     setMerchantActive(wallet, active) {
       const authority = me();
       return send(
@@ -446,6 +511,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const payer = me();
       const emp = await this.getEmployeeByWallet(payer);
       if (!emp) throw new TabbitError("EmployeeInactive", "This wallet has no meal benefit");
+      await requireApproved(emp.employer);
       const [employer, config] = await Promise.all([
         program.account.employer.fetch(emp.employer),
         program.account.config.fetch(configPda),

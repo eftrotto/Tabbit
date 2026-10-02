@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import type { Category, EmployeeAccount } from "@tabbit/sdk";
 import { Card } from "@/components/ui";
+import { useEmployeeLogin } from "@/lib/employee-wallet";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -15,6 +16,28 @@ export function ConnectCard({ what }: { what: string }) {
     <Card title="Connect your wallet">
       <p className="mb-4 text-sm opacity-70">{what}</p>
       <WalletMultiButton />
+    </Card>
+  );
+}
+
+/** Entrada do funcionário: e-mail/Google (carteira embutida) quando o Privy está ligado; senão, Phantom. */
+export function EmployeeSignIn({ what, walletWhat }: { what: string; walletWhat: string }) {
+  const { status, login } = useEmployeeLogin();
+  if (status === "disabled") return <ConnectCard what={walletWhat} />;
+  if (status === "loading") return <p className="opacity-60">Loading…</p>;
+  if (status === "creating-wallet") return <p className="opacity-60">Setting up your Tabbit account…</p>;
+  return (
+    <Card title="Sign in to Tabbit">
+      <p className="mb-4 text-sm opacity-70">{what}</p>
+      <button className="btn-primary w-full !py-3 text-lg" onClick={login}>
+        Sign in with email or Google
+      </button>
+      <details className="mt-4 text-sm">
+        <summary className="cursor-pointer opacity-70">Use a Solana wallet instead</summary>
+        <div className="mt-3">
+          <WalletMultiButton />
+        </div>
+      </details>
     </Card>
   );
 }

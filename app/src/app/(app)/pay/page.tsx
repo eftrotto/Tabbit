@@ -9,7 +9,7 @@ import { Card, DemoBanner, ErrorText, Money, ResultIcon, shortKey } from "@/comp
 import { parseUsdc } from "@/lib/currency";
 import { friendlyError } from "@/lib/errors";
 import { explorerTxUrl, useLoad, useTabbit, type TabbitContext } from "@/lib/tabbit";
-import { availableToday, CategoryBadge, ConnectCard, fmtTime, NotLinked } from "../employee/shared";
+import { availableToday, CategoryBadge, EmployeeSignIn, fmtTime, NotLinked } from "../employee/shared";
 
 // Scanner só no cliente (usa câmera).
 const Scanner = dynamic(() => import("@yudiel/react-qr-scanner").then((m) => m.Scanner), { ssr: false });
@@ -40,7 +40,7 @@ function PayRouter() {
     <div className="mx-auto max-w-md">
       <DemoBanner isMock={tabbit.isMock} isDemoPersona={tabbit.isDemoPersona} persona="João (employee)" />
       {!tabbit.actor ? (
-        <ConnectCard what="Connect your wallet to pay with your meal benefit." />
+        <EmployeeSignIn what="Sign in to pay with your meal benefit." walletWhat="Connect your wallet to pay with your meal benefit." />
       ) : merchant && isKey(merchant) && sp.get("scan") !== "1" ? (
         <PayFlow key={merchant} tabbit={tabbit} merchant={new PublicKey(merchant)} initialAmount={amount} />
       ) : (

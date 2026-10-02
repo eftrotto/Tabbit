@@ -65,7 +65,9 @@ Essa conferência impede que alguém use a chave para outra coisa. Em devnet o p
 
 > Alternativa: o Privy anuncia patrocínio de taxa nativo para Solana. Não foi verificado se funciona na devnet nem no plano grátis, então o plano não depende disso.
 
-## Parte 2: Privy só para o funcionário (~1 dia)
+## Parte 2: Privy só para o funcionário (feito em 02/10, branch `b/privy-employee`)
+
+> Implementado em `app/src/lib/employee-wallet.tsx` (provider, adaptador Privy → `AnchorWallet` e contexto `useEmployeeLogin`), `EmployeeSignIn` em `employee/shared.tsx`, botão de conta no `header.tsx` e cartão "Your wallet" (endereço, Explorer, exportar chave) no `/employee`. Envs: `NEXT_PUBLIC_PRIVY_APP_ID` (público). Testado na devnet: login com Google, carteira criada com 0 SOL, pagamento assinado pela carteira Privy e taxa paga pelo patrocinador.
 
 ### 2.1 Setup
 
@@ -120,7 +122,7 @@ O Privy é grande. Carregar o provider só no grupo `(app)` (ou com `dynamic`) p
 
 - [x] Funcionário com 0 SOL paga com Phantom via patrocinador (parte 1) — testado na devnet em 02/10
 - [x] Rota recusa transação que não seja `pay` do Tabbit
-- [ ] Funcionário entra com Google no celular, abre o link do QR no navegador comum e paga
-- [ ] `/employer` e `/merchant` continuam só com Phantom
-- [ ] Mock continua funcionando sem Privy
+- [x] Funcionário entra com Google e paga com 0 SOL (testado no navegador do computador; falta testar no celular pelo QR)
+- [x] `/employer` e `/merchant` continuam só com Phantom
+- [x] Mock continua funcionando sem Privy
 - [ ] `anchor test`, `npm run build`, `lint` e `typecheck` do app verdes

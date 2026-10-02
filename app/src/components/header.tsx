@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { CURRENCIES, type DisplayCurrency } from "@/lib/currency";
 import { motion } from "motion/react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useEmployeeLogin } from "@/lib/employee-wallet";
 import { TabbitMark, Wordmark } from "./brand";
 import { useCurrency } from "./providers";
 
@@ -21,6 +23,25 @@ const NAV = [
 
 export function Logo({ className = "h-8 w-8" }: { className?: string }) {
   return <TabbitMark className={className} id="header-mark" />;
+}
+
+/** Nas telas do funcionário com login por e-mail ligado: entrar/sair. No resto (e com Phantom conectada): botão da carteira. */
+function AccountButton({ employeeView }: { employeeView: boolean }) {
+  const login = useEmployeeLogin();
+  const { connected } = useWallet();
+  if (!employeeView || login.status === "disabled" || connected) return <WalletMultiButton />;
+  if (login.status === "ready")
+    return (
+      <div className="flex items-center gap-2">
+        {login.label && <span className="hidden max-w-[12rem] truncate text-sm font-semibold sm:inline">{login.label}</span>}
+        <button className="btn-secondary !rounded-xl !px-3 !py-1.5 text-sm" onClick={() => void login.logout()}>Sign out</button>
+      </div>
+    );
+  return (
+    <button className="btn-primary !rounded-xl !px-4 !py-1.5 text-sm" disabled={login.status === "loading"} onClick={login.login}>
+      Sign in
+    </button>
+  );
 }
 
 export function Header() {
@@ -56,7 +77,7 @@ export function Header() {
               <option key={c}>{c}</option>
             ))}
           </select>
-          <WalletMultiButton />
+          <AccountButton employeeView={path.startsWith("/employee") || path.startsWith("/pay")} />
         </div>
       </div>
     </header>

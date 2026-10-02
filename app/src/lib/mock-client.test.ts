@@ -142,3 +142,9 @@ test("batch upsert is all-or-nothing", async () => {
   assert.equal(sigs.length, 1);
   assert.equal((await acme.listEmployees(DEMO.employer)).length, 4);
 });
+
+test("wallet without SOL gets a clear message", async () => {
+  const { friendlyError } = await import("./errors.ts");
+  assert.match(friendlyError(new Error('Transaction simulation failed: "AccountNotFound"')), /no SOL/);
+  assert.match(friendlyError(new Error("Attempt to debit an account but found no record of a prior credit.")), /faucet/);
+});

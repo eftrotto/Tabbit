@@ -4,8 +4,9 @@ import { Card, DemoBanner, ErrorText, Money } from "@/components/ui";
 import { LiveMark } from "@/components/landing/live-mark";
 import { formatWindow } from "@/lib/time";
 import { friendlyError } from "@/lib/errors";
-import { explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
-import { availableToday, CategoryBadge, ConnectCard, fmtTime, NotLinked } from "./shared";
+import { useEmployeeLogin } from "@/lib/employee-wallet";
+import { explorerAddressUrl, explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
+import { availableToday, CategoryBadge, CopyButton, EmployeeSignIn, fmtTime, NotLinked } from "./shared";
 
 export default function EmployeePage() {
   const { client, actor, isMock, isDemoPersona } = useTabbit("employee");
@@ -17,7 +18,7 @@ export default function EmployeePage() {
   }, [client, actor]);
 
   const banner = <DemoBanner isMock={isMock} isDemoPersona={isDemoPersona} persona="João (employee)" />;
-  if (!actor) return <div className="mx-auto max-w-md">{banner}<ConnectCard what="Connect the wallet your employer registered to see your meal benefit." /></div>;
+  if (!actor) return <div className="mx-auto max-w-md">{banner}<EmployeeSignIn what="Sign in with the email your employer registered to see your meal benefit." walletWhat="Connect the wallet your employer registered to see your meal benefit." /></div>;
   if (error) return <div className="mx-auto max-w-md">{banner}<ErrorText>{friendlyError(error)}</ErrorText></div>;
   if (loading || !data) return <div className="mx-auto max-w-md">{banner}<p className="opacity-60">Loading your benefit…</p></div>;
 
@@ -110,6 +111,27 @@ export default function EmployeePage() {
           ))}
         </ul>
       </Card>
+
+      {!isMock && <WalletCard address={actor.toBase58()} />}
     </div>
+  );
+}
+
+/** A carteira é do funcionário: endereço público, link para o Explorer e, no login por e-mail, exportar a chave. */
+function WalletCard({ address }: { address: string }) {
+  const { status, exportKey } = useEmployeeLogin();
+  return (
+    <Card title="Your wallet">
+      <div className="flex items-center gap-2">
+        <code className="min-w-0 flex-1 break-all rounded-lg bg-ink/5 px-3 py-2 text-xs">{address}</code>
+        <CopyButton text={address} />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <a className="underline" href={explorerAddressUrl(address)} target="_blank" rel="noreferrer">View on Solana Explorer</a>
+        {status === "ready" && (
+          <button className="underline" onClick={() => void exportKey()}>Export private key</button>
+        )}
+      </div>
+    </Card>
   );
 }

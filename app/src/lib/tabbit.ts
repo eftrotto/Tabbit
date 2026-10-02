@@ -1,14 +1,16 @@
 "use client";
 // Escolhe o cliente: mock (padrão) ou SDK real com NEXT_PUBLIC_USE_MOCK=false.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { clusterApiUrl, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
 import { createTabbitClient, USDC_DEVNET_MINT, type TabbitClient } from "@tabbit/sdk";
 import { createMockClient, DEMO } from "./mock-client";
 import { fetchSponsorKey, sponsorFor } from "./sponsor";
+import { useEmployeeLogin } from "./employee-wallet";
+import { RPC_URL, USE_MOCK } from "./config";
 
-export const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== "false";
-export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || clusterApiUrl("devnet");
+export { RPC_URL, USE_MOCK };
+
 // Mint do benefício. O seed do Dev A usa um token de teste próprio; sem env, USDC da Circle (devnet).
 export const BENEFIT_MINT = process.env.NEXT_PUBLIC_MINT ? new PublicKey(process.env.NEXT_PUBLIC_MINT) : USDC_DEVNET_MINT;
 
@@ -31,7 +33,10 @@ export interface TabbitContext {
 
 export function useTabbit(role: Role): TabbitContext {
   const { connection } = useConnection();
-  const wallet = useAnchorWallet();
+  const adapterWallet = useAnchorWallet();
+  const employeeLogin = useEmployeeLogin();
+  // Funcionário logado por e-mail/Google usa a carteira embutida; o resto, a Phantom
+  const wallet = (role === "employee" && employeeLogin.wallet) || adapterWallet;
   const sponsorKey = useSponsorKey(role === "employee");
   return useMemo(() => {
     if (!USE_MOCK) {

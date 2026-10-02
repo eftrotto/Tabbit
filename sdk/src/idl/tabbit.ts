@@ -75,6 +75,33 @@ export type Tabbit = {
         {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "approval",
+          "docs": [
+            "Empresa precisa estar aprovada pela plataforma para colocar dinheiro na rede."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "employer"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -120,6 +147,12 @@ export type Tabbit = {
               }
             ]
           }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Token oficial do benefício (USDC, ou o token de teste na devnet)."
+          ]
         },
         {
           "name": "systemProgram",
@@ -282,6 +315,33 @@ export type Tabbit = {
         {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "approval",
+          "docs": [
+            "No fim da lista para não mudar a posição das outras contas (o fee payer confere por posição)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "employer"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -335,7 +395,28 @@ export type Tabbit = {
           }
         },
         {
-          "name": "mint"
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Só o token oficial do benefício: impede empresa com token próprio sem valor."
+          ]
         },
         {
           "name": "vault",
@@ -620,6 +701,85 @@ export type Tabbit = {
       "args": []
     },
     {
+      "name": "setEmployerApproved",
+      "discriminator": [
+        255,
+        192,
+        197,
+        118,
+        175,
+        96,
+        252,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "employer"
+        },
+        {
+          "name": "approval",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  112,
+                  112,
+                  114,
+                  111,
+                  118,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "employer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "approved",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "setMerchantActive",
       "discriminator": [
         135,
@@ -690,6 +850,56 @@ export type Tabbit = {
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "setMint",
+      "discriminator": [
+        166,
+        129,
+        167,
+        223,
+        137,
+        118,
+        212,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "docs": [
+            "e autoridade são conferidos no handler."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "setPaused",
@@ -958,6 +1168,19 @@ export type Tabbit = {
       ]
     },
     {
+      "name": "employerApproval",
+      "discriminator": [
+        75,
+        91,
+        63,
+        5,
+        178,
+        70,
+        148,
+        30
+      ]
+    },
+    {
       "name": "merchant",
       "discriminator": [
         71,
@@ -1046,6 +1269,16 @@ export type Tabbit = {
       "code": 6011,
       "name": "invalidWindow",
       "msg": "Invalid time window"
+    },
+    {
+      "code": 6012,
+      "name": "employerNotApproved",
+      "msg": "Company is not approved by Tabbit yet"
+    },
+    {
+      "code": 6013,
+      "name": "invalidMint",
+      "msg": "Token is not the official benefit token"
     }
   ],
   "types": [
@@ -1076,6 +1309,14 @@ export type Tabbit = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "Token oficial do benefício. Empresas só se cadastram com ele. Fica no fim da struct",
+              "porque foi adicionado depois do primeiro deploy (ver set_mint, que migra a Config antiga)."
+            ],
+            "type": "pubkey"
           }
         ]
       }
@@ -1179,6 +1420,30 @@ export type Tabbit = {
           {
             "name": "totalAllocated",
             "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "employerApproval",
+      "docs": [
+        "Seeds: [\"approval\", employer]. A empresa nasce pendente: só deposita e paga depois",
+        "que a plataforma aprova (contrato, KYB, onboarding feitos fora da cadeia)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "employer",
+            "type": "pubkey"
+          },
+          {
+            "name": "approved",
+            "type": "bool"
           },
           {
             "name": "bump",

@@ -82,6 +82,23 @@ describe("tabbit", () => {
       .rpc();
   }
 
+  const approvalPda = pda(Buffer.from("approval"), employerPda.toBuffer());
+
+  function deposit(amount: BN) {
+    return program.methods
+      .deposit(amount)
+      .accountsPartial({ owner: employerOwner.publicKey, employer: employerPda, vault, ownerToken })
+      .signers([employerOwner])
+      .rpc();
+  }
+
+  function setApproved(approved: boolean) {
+    return program.methods
+      .setEmployerApproved(approved)
+      .accountsPartial({ authority: platform.publicKey, config: configPda, employer: employerPda })
+      .rpc();
+  }
+
   function upsert(wallet: PublicKey, balance: BN, maxPerMeal: BN, dailyCap: BN, ws = 0, we = 0) {
     return program.methods
       .upsertEmployee(wallet, balance, maxPerMeal, dailyCap, ws, we)
@@ -102,10 +119,11 @@ describe("tabbit", () => {
     vault = getAssociatedTokenAddressSync(mint, employerPda, true);
   });
 
-  it("initialize cria a Config com taxa de 0,8%", async () => {
-    await program.methods.initialize(80, treasury.publicKey).rpc();
+  it("initialize cria a Config com taxa de 0,8% e o token oficial", async () => {
+    await program.methods.initialize(80, treasury.publicKey).accountsPartial({ mint }).rpc();
     const config = await program.account.config.fetch(configPda);
     expect(config.feeBps).to.equal(80);
+    expect(config.mint.toBase58()).to.equal(mint.toBase58());
     expect(config.treasury.toBase58()).to.equal(treasury.publicKey.toBase58());
     expect(config.paused).to.equal(false);
   });
@@ -122,12 +140,60 @@ describe("tabbit", () => {
     expect(e.tzOffsetMinutes).to.equal(TZ_BRASILIA);
   });
 
+  it("empresa com token próprio não consegue se cadastrar", async () => {
+    const fakeOwner = Keypair.generate();
+    await airdrop(fakeOwner.publicKey);
+    const fakeMint = await createMint(connection, fakeOwner, fakeOwner.publicKey, null, 6);
+    const fakeEmployer = pda(Buffer.from("employer"), fakeOwner.publicKey.toBuffer());
+    await expectError(
+      program.methods
+        .registerEmployer("Golpe Ltda", TZ_BRASILIA)
+        .accountsPartial({
+          owner: fakeOwner.publicKey,
+          employer: fakeEmployer,
+          mint: fakeMint,
+          vault: getAssociatedTokenAddressSync(fakeMint, fakeEmployer, true),
+        })
+        .signers([fakeOwner])
+        .rpc(),
+      "InvalidMint"
+    );
+  });
+
+  it("empresa pendente não deposita; só a plataforma aprova", async () => {
+    try {
+      await deposit(USDC(1));
+      expect.fail("deveria falhar");
+    } catch (e: any) {
+      // sem aprovação a conta ["approval", empresa] nem existe
+      expect(String(e)).to.match(/AccountNotInitialized|not initialized|EmployerNotApproved/i);
+    }
+    await expectError(
+      program.methods
+        .setEmployerApproved(true)
+        .accountsPartial({ authority: outsider.publicKey, config: configPda, employer: employerPda })
+        .signers([outsider])
+        .rpc(),
+      "Unauthorized"
+    );
+    await setApproved(true);
+    const approval = await program.account.employerApproval.fetch(approvalPda);
+    expect(approval.approved).to.equal(true);
+  });
+
+  it("set_mint é só da plataforma e mantém a Config legível", async () => {
+    await expectError(
+      program.methods.setMint().accountsPartial({ authority: outsider.publicKey, mint }).signers([outsider]).rpc(),
+      "Unauthorized"
+    );
+    await program.methods.setMint().accountsPartial({ authority: platform.publicKey, mint }).rpc();
+    const config = await program.account.config.fetch(configPda);
+    expect(config.mint.toBase58()).to.equal(mint.toBase58());
+    expect(config.feeBps).to.equal(80);
+  });
+
   it("deposita 1.000 USDC no cofre", async () => {
-    await program.methods
-      .deposit(USDC(1000))
-      .accountsPartial({ owner: employerOwner.publicKey, employer: employerPda, vault, ownerToken })
-      .signers([employerOwner])
-      .rpc();
+    await deposit(USDC(1000));
     expect(await balanceOf(vault)).to.equal(1000 * 1_000_000);
     const e = await program.account.employer.fetch(employerPda);
     expect(e.totalDeposited.toNumber()).to.equal(1000 * 1_000_000);
@@ -223,6 +289,12 @@ describe("tabbit", () => {
   it("paga dentro da janela quando ela cobre o horário atual", async () => {
     await upsert(maria.publicKey, USDC(100), USDC(40), USDC(60), 0, 1440);
     await pay(maria, restaurant.publicKey, restaurantToken, USDC(10));
+  });
+
+  it("empresa suspensa pela plataforma não paga", async () => {
+    await setApproved(false);
+    await expectError(pay(maria, restaurant.publicKey, restaurantToken, USDC(1)), "EmployerNotApproved");
+    await setApproved(true);
   });
 
   it("pausa trava todos os pagamentos", async () => {

@@ -4,7 +4,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 use crate::errors::TabbitError;
-use crate::state::{Employee, Employer, MAX_NAME_LEN};
+use crate::state::{Config, Employee, Employer, EmployerApproval, MAX_NAME_LEN};
 use crate::time::validate_window;
 
 /// Fusos válidos: UTC-12 até UTC+14.
@@ -27,6 +27,11 @@ pub struct RegisterEmployer<'info> {
     )]
     pub employer: Account<'info, Employer>,
 
+    #[account(seeds = [b"config"], bump = config.bump)]
+    pub config: Account<'info, Config>,
+
+    /// Só o token oficial do benefício: impede empresa com token próprio sem valor.
+    #[account(address = config.mint @ TabbitError::InvalidMint)]
     pub mint: Account<'info, Mint>,
 
     /// Cofre: ATA do mint cujo dono é o PDA da empresa.
@@ -89,6 +94,14 @@ pub struct Deposit<'info> {
     pub owner_token: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
+
+    /// Empresa precisa estar aprovada pela plataforma para colocar dinheiro na rede.
+    #[account(
+        seeds = [b"approval", employer.key().as_ref()],
+        bump = approval.bump,
+        constraint = approval.approved @ TabbitError::EmployerNotApproved
+    )]
+    pub approval: Account<'info, EmployerApproval>,
 }
 
 pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {

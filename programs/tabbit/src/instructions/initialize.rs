@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::Mint;
 
 use crate::errors::TabbitError;
 use crate::state::{Config, BPS_DENOMINATOR};
@@ -18,6 +19,9 @@ pub struct Initialize<'info> {
     )]
     pub config: Account<'info, Config>,
 
+    /// Token oficial do benefício (USDC, ou o token de teste na devnet).
+    pub mint: Account<'info, Mint>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -30,5 +34,6 @@ pub fn handler(ctx: Context<Initialize>, fee_bps: u16, treasury: Pubkey) -> Resu
     config.fee_bps = fee_bps;
     config.paused = false;
     config.bump = ctx.bumps.config;
+    config.mint = ctx.accounts.mint.key();
     Ok(())
 }

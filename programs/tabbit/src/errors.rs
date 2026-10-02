@@ -27,4 +27,8 @@ pub enum TabbitError {
     NameTooLong,
     #[msg("Invalid time window")]
     InvalidWindow,
+    #[msg("Company is not approved by Tabbit yet")]
+    EmployerNotApproved,
+    #[msg("Token is not the official benefit token")]
+    InvalidMint,
 }

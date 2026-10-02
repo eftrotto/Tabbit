@@ -4,7 +4,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 use crate::errors::TabbitError;
 use crate::events::PaymentMade;
-use crate::state::{Config, Employee, Employer, Merchant, BPS_DENOMINATOR};
+use crate::state::{Config, Employee, Employer, EmployerApproval, Merchant, BPS_DENOMINATOR};
 use crate::time::{is_within_window, local_day_and_minute};
 
 #[derive(Accounts)]
@@ -19,7 +19,8 @@ pub struct Pay<'info> {
         mut,
         seeds = [b"employer", employer.owner.as_ref()],
         bump = employer.bump,
-        has_one = vault
+        has_one = vault,
+        constraint = employer.mint == config.mint @ TabbitError::InvalidMint
     )]
     pub employer: Box<Account<'info, Employer>>,
 
@@ -54,6 +55,14 @@ pub struct Pay<'info> {
     pub treasury_token: Box<Account<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
+
+    /// No fim da lista para não mudar a posição das outras contas (o fee payer confere por posição).
+    #[account(
+        seeds = [b"approval", employer.key().as_ref()],
+        bump = approval.bump,
+        constraint = approval.approved @ TabbitError::EmployerNotApproved
+    )]
+    pub approval: Box<Account<'info, EmployerApproval>>,
 }
 
 pub fn pay(ctx: Context<Pay>, amount: u64) -> Result<()> {

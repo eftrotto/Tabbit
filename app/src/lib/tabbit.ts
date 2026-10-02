@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
-import { createTabbitClient, USDC_DEVNET_MINT, type TabbitClient } from "@tabbit/sdk";
+import { createTabbitClient, type TabbitClient } from "@tabbit/sdk";
 import { createMockClient, DEMO } from "./mock-client";
 import { fetchSponsorKey, sponsorFor } from "./sponsor";
 import { useEmployeeLogin } from "./employee-wallet";
@@ -11,17 +11,15 @@ import { RPC_URL, USE_MOCK } from "./config";
 
 export { RPC_URL, USE_MOCK };
 
-// Mint do benefício. O seed do Dev A usa um token de teste próprio; sem env, USDC da Circle (devnet).
-export const BENEFIT_MINT = process.env.NEXT_PUBLIC_MINT ? new PublicKey(process.env.NEXT_PUBLIC_MINT) : USDC_DEVNET_MINT;
 
 export const explorerTxUrl = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
 export const explorerAddressUrl = (addr: PublicKey | string) =>
   `https://explorer.solana.com/address/${addr.toString()}?cluster=devnet`;
 
-export type Role = "employer" | "employee" | "merchant";
+export type Role = "employer" | "employee" | "merchant" | "admin";
 
 // No mock, sem carteira conectada, cada visão age como uma persona da demo.
-const PERSONA: Record<Role, PublicKey> = { employer: DEMO.employer, employee: DEMO.employee, merchant: DEMO.merchant };
+const PERSONA: Record<Role, PublicKey> = { employer: DEMO.employer, employee: DEMO.employee, merchant: DEMO.merchant, admin: DEMO.platform };
 
 export interface TabbitContext {
   client: TabbitClient;

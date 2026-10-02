@@ -12,6 +12,7 @@ export const SEEDS = {
   employer: "employer",
   employee: "employee",
   merchant: "merchant",
+  approval: "approval",
 } as const;
 
 export const CATEGORY_CODES = { restaurant: 0, cafe: 1, grocery: 2, other: 3 } as const;

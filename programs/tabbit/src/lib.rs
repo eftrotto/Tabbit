@@ -24,6 +24,14 @@ pub mod tabbit {
         instructions::admin::set_paused(ctx, paused)
     }
 
+    pub fn set_mint(ctx: Context<SetMint>) -> Result<()> {
+        instructions::admin::set_mint(ctx)
+    }
+
+    pub fn set_employer_approved(ctx: Context<SetEmployerApproved>, approved: bool) -> Result<()> {
+        instructions::admin::set_employer_approved(ctx, approved)
+    }
+
     pub fn register_employer(ctx: Context<RegisterEmployer>, name: String, tz_offset_minutes: i16) -> Result<()> {
         instructions::employer::register_employer(ctx, name, tz_offset_minutes)
     }

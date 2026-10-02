@@ -10,6 +10,7 @@ export interface ConfigAccount {
   treasury: PublicKey;
   feeBps: number;
   paused: boolean;
+  mint: PublicKey; // token oficial do benefício
 }
 
 export interface EmployerAccount {
@@ -21,6 +22,7 @@ export interface EmployerAccount {
   tzOffsetMinutes: number;
   totalDeposited: bigint;
   totalAllocated: bigint;
+  approved: boolean; // aprovada pela plataforma (só então deposita e paga)
 }
 
 export interface EmployeeAccount {
@@ -75,7 +77,9 @@ export type TabbitErrorCode =
   | "OverAllocated"
   | "InvalidAmount"
   | "NameTooLong"
-  | "InvalidWindow";
+  | "InvalidWindow"
+  | "EmployerNotApproved"
+  | "InvalidMint";
 
 export class TabbitError extends Error {
   constructor(public code: TabbitErrorCode, message?: string) {
@@ -89,6 +93,7 @@ export interface TabbitClient {
   // leitura
   getConfig(): Promise<ConfigAccount>;
   getEmployer(owner: PublicKey): Promise<EmployerAccount | null>;
+  listEmployers(): Promise<EmployerAccount[]>;
   listEmployees(employerOwner: PublicKey): Promise<EmployeeAccount[]>;
   getEmployeeByWallet(wallet: PublicKey): Promise<EmployeeAccount | null>; // MVP: 1 empresa por funcionário
   listMerchants(): Promise<MerchantAccount[]>;
@@ -102,12 +107,17 @@ export interface TabbitClient {
   onPayment(cb: (p: Payment) => void): () => void; // retorna função para cancelar
 
   // escrita (a carteira conectada assina)
-  registerEmployer(input: { name: string; mint: PublicKey; tzOffsetMinutes: number }): Promise<TransactionSignature>;
+  /** mint é opcional: o programa só aceita o token oficial da Config. */
+  registerEmployer(input: { name: string; mint?: PublicKey; tzOffsetMinutes: number }): Promise<TransactionSignature>;
   deposit(amount: bigint): Promise<TransactionSignature>;
   upsertEmployee(input: UpsertEmployeeInput): Promise<TransactionSignature>;
+  /** Vários funcionários de uma vez (planilha, recarga mensal): agrupa em poucas transações e pede uma assinatura só. */
+  upsertEmployees(inputs: UpsertEmployeeInput[]): Promise<TransactionSignature[]>;
   revokeEmployee(wallet: PublicKey): Promise<TransactionSignature>;
   withdrawUnallocated(amount: bigint): Promise<TransactionSignature>;
   registerMerchant(input: { wallet: PublicKey; name: string; category: Category }): Promise<TransactionSignature>;
   setMerchantActive(wallet: PublicKey, active: boolean): Promise<TransactionSignature>;
+  setEmployerApproved(owner: PublicKey, approved: boolean): Promise<TransactionSignature>;
+  setPaused(paused: boolean): Promise<TransactionSignature>;
   pay(input: { merchant: PublicKey; amount: bigint }): Promise<TransactionSignature>;
 }

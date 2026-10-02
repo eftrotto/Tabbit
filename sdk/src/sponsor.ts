@@ -5,13 +5,16 @@ import { PublicKey, Transaction } from "@solana/web3.js";
 
 import idl from "./idl/tabbit.json";
 
-const PAY_DISCRIMINATOR = Buffer.from(idl.instructions.find((i) => i.name === "pay")!.discriminator);
+const PAY_IX = idl.instructions.find((i) => i.name === "pay")!;
+const PAY_DISCRIMINATOR = Buffer.from(PAY_IX.discriminator);
 const CREATE_IDEMPOTENT = 1; // instrução do Associated Token Program
 
-// Ordem das contas em `pay` (programs/tabbit/src/instructions/pay.rs)
-const PAY_PAYER = 0;
-const PAY_MERCHANT_TOKEN = 6;
-const PAY_TREASURY_TOKEN = 7;
+// Posição das contas em `pay`, lida da IDL (programs/tabbit/src/instructions/pay.rs)
+const payIndex = (name: string) => PAY_IX.accounts.findIndex((a) => a.name === name);
+const PAY_PAYER = payIndex("payer");
+const PAY_MERCHANT_TOKEN = payIndex("merchant_token");
+const PAY_TREASURY_TOKEN = payIndex("treasury_token");
+const PAY_ACCOUNTS = PAY_IX.accounts.length;
 
 export class SponsorRejected extends Error {}
 
@@ -34,7 +37,7 @@ export function validateSponsoredPay(tx: Transaction, sponsor: PublicKey, progra
   if (pays.length !== 1) reject("expected exactly one Tabbit instruction");
   const pay = pays[0];
   if (!pay.data.subarray(0, 8).equals(PAY_DISCRIMINATOR)) reject("only `pay` can be sponsored");
-  if (pay.keys.length < PAY_TREASURY_TOKEN + 1) reject("malformed `pay`");
+  if (pay.keys.length !== PAY_ACCOUNTS) reject("malformed `pay`");
   if (pay.keys.some((k) => k.pubkey.equals(sponsor))) reject("sponsor cannot be a `pay` account");
 
   const employee = pay.keys[PAY_PAYER].pubkey;

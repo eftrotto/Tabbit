@@ -95,16 +95,7 @@ async function main() {
   const asPlatform = createTabbitClient({ connection, wallet: walletOf(platform) });
   const asEmployer = createTabbitClient({ connection, wallet: walletOf(employerKp) });
 
-  // 1. Config (taxa 0,8%, tesouraria = carteira da plataforma)
-  if (!(await connection.getAccountInfo(findConfigPda()))) {
-    const program = new Program<Tabbit>(idl as Tabbit, new AnchorProvider(connection, walletOf(platform), {}));
-    await program.methods.initialize(80, platform.publicKey).accounts({ authority: platform.publicKey }).rpc();
-    console.log("✓ Config criada (taxa 0,8%)");
-  } else {
-    console.log("• Config já existe");
-  }
-
-  // 2. Moeda
+  // 1. Moeda (vem antes da Config: ela guarda o token oficial)
   let mint: PublicKey;
   if (MINT_MODE === "usdc") {
     mint = USDC_DEVNET_MINT;
@@ -120,12 +111,25 @@ async function main() {
     }
   }
 
-  // 3. Empresa + depósito
+  // 2. Config (taxa 0,8%, tesouraria = carteira da plataforma, token oficial)
+  if (!(await connection.getAccountInfo(findConfigPda()))) {
+    const program = new Program<Tabbit>(idl as Tabbit, new AnchorProvider(connection, walletOf(platform), {}));
+    await program.methods.initialize(80, platform.publicKey).accountsPartial({ authority: platform.publicKey, mint }).rpc();
+    console.log("✓ Config criada (taxa 0,8%)");
+  } else {
+    console.log("• Config já existe");
+  }
+
+  // 3. Empresa (aprovada pela plataforma) + depósito
   let employer = await asEmployer.getEmployer(employerKp.publicKey);
   if (!employer) {
-    await asEmployer.registerEmployer({ name: "Acme Ltda", mint, tzOffsetMinutes: -180 });
+    await asEmployer.registerEmployer({ name: "Acme Ltda", tzOffsetMinutes: -180 });
     console.log("✓ Empresa Acme Ltda registrada");
     employer = await asEmployer.getEmployer(employerKp.publicKey);
+  }
+  if (!employer!.approved) {
+    await asPlatform.setEmployerApproved(employerKp.publicKey, true);
+    console.log("✓ Empresa aprovada pela plataforma");
   }
   const needed = U(EMPLOYEES.reduce((s, e) => s + e.balance, 0));
   if (employer!.totalDeposited < needed) {

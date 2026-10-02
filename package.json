@@ -12,7 +12,8 @@
     "dev": "npm run dev -w app",
     "build": "npm run build:sdk && npm run build -w app",
     "seed": "ts-node --transpile-only -P tsconfig.json scripts/seed-devnet.ts",
-    "key:export": "ts-node --transpile-only -P tsconfig.json scripts/export-key.ts"
+    "key:export": "ts-node --transpile-only -P tsconfig.json scripts/export-key.ts",
+    "migrate:approval": "ts-node --transpile-only -P tsconfig.json scripts/migrate-approval.ts"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.31.1",

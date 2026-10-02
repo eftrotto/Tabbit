@@ -14,6 +14,9 @@ pub struct Config {
     pub fee_bps: u16,
     pub paused: bool,
     pub bump: u8,
+    /// Token oficial do benefício. Empresas só se cadastram com ele. Fica no fim da struct
+    /// porque foi adicionado depois do primeiro deploy (ver set_mint, que migra a Config antiga).
+    pub mint: Pubkey,
 }
 
 /// Seeds: ["employer", owner]
@@ -30,6 +33,16 @@ pub struct Employer {
     pub tz_offset_minutes: i16,
     pub total_deposited: u64,
     pub total_allocated: u64,
+    pub bump: u8,
+}
+
+/// Seeds: ["approval", employer]. A empresa nasce pendente: só deposita e paga depois
+/// que a plataforma aprova (contrato, KYB, onboarding feitos fora da cadeia).
+#[account]
+#[derive(InitSpace)]
+pub struct EmployerApproval {
+    pub employer: Pubkey,
+    pub approved: bool,
     pub bump: u8,
 }
 

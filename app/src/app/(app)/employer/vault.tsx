@@ -6,8 +6,8 @@ import { Card, Money } from "@/components/ui";
 import { parseUsdc } from "@/lib/currency";
 import { TxStatus, useTx } from "./tx";
 
-function AmountForm({ label, cta, hint, isMock, write, onDone }: {
-  label: string; cta: string; hint?: string; isMock: boolean;
+function AmountForm({ label, cta, hint, isMock, write, onDone, disabled }: {
+  label: string; cta: string; hint?: string; isMock: boolean; disabled?: boolean;
   write: (amount: bigint) => Promise<string>; onDone: () => Promise<unknown> | void;
 }) {
   const [value, setValue] = useState("");
@@ -23,7 +23,7 @@ function AmountForm({ label, cta, hint, isMock, write, onDone }: {
       <label className="label" htmlFor={`amt-${cta}`}>{label}</label>
       <div className="flex gap-2">
         <input id={`amt-${cta}`} className="input" inputMode="decimal" placeholder="0.00" value={value} onChange={(e) => setValue(e.target.value)} />
-        <button className="btn-primary shrink-0" disabled={tx.pending}>{tx.pending ? "…" : cta}</button>
+        <button className="btn-primary shrink-0" disabled={tx.pending || disabled}>{tx.pending ? "…" : cta}</button>
       </div>
       {hint && <p className="text-xs opacity-60">{hint}</p>}
       <TxStatus error={tx.error} sig={tx.sig} isMock={isMock} />
@@ -51,7 +51,8 @@ export function Vault({ client, employer, isMock, onChanged }: {
         <p className="mt-1 text-xs opacity-60">{pct}% allocated</p>
       </div>
       <div className="mt-5 grid gap-6 border-t border-ink/10 pt-5 sm:grid-cols-2">
-        <AmountForm label="Deposit (USDC)" cta="Deposit" isMock={isMock} write={(a) => client.deposit(a)} onDone={onChanged} />
+        <AmountForm label="Deposit (USDC)" cta="Deposit" isMock={isMock} write={(a) => client.deposit(a)} onDone={onChanged}
+          disabled={!employer.approved} hint={employer.approved ? undefined : "Available after Tabbit approves your company."} />
         <AmountForm label="Withdraw unallocated (USDC)" cta="Withdraw" hint="Only funds not assigned to an employee can leave the vault." isMock={isMock}
           write={(a) => client.withdrawUnallocated(a)} onDone={onChanged} />
       </div>

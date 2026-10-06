@@ -11,8 +11,9 @@
 - [x] **SDK real** (`createTabbitClient`) implementando toda a interface, com erros tipados
 - [x] Script de dados de demo (`npm run seed`) e exportador de chave para o Phantom (`npm run key:export`)
 - [x] Dev A: **deploy na devnet** feito em 01/10: programa `Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn`, mint de teste `4ZCy4DfmE9EfoPA1uipY6LxGe3ttVXFR91pta5vQxKJ5` (seed rodado)
-- [ ] Dev A: fee payer (extra)
-- [ ] Dev B: criar o app em `app/` e as 3 visões (seção 6). Pode usar o SDK real direto em localnet ou devnet; o mock continua útil para trabalhar offline
+- [x] Dev A: fee payer (extra), feito em 02/10 (`/api/sponsor`, ver `docs/CARTEIRA-EMBUTIDA.md`)
+- [x] Dev B: app em `app/` com as 3 visões (seção 6), mais login por e-mail/Google (Privy), painel `/admin` e página `/transparency`
+- [x] Aprovação de empresas e token oficial no programa (upgrade na devnet em 02/10)
 
 ## Setup (os dois)
 
@@ -358,8 +359,8 @@ Tração é dos dois: meta de 15 restaurantes entrevistados, 3 cartas de intenç
 
 ## 9. Checklist da submissão
 
-- [ ] Repositório público com README em inglês (o que é, arquitetura, `PROGRAM_ID`, como rodar, link do app)
-- [ ] App publicado na Vercel apontando para a devnet
+- [x] Repositório público com README em inglês (o que é, arquitetura, `PROGRAM_ID`, como rodar, link do app)
+- [x] App publicado na Vercel apontando para a devnet (tabbit-sol.vercel.app)
 - [ ] Programa na devnet com transações reais do piloto
 - [ ] Vídeo de 3 min (problema, por que agora, demo, tração, distribuição)
 - [ ] Números de tração reais

@@ -10,6 +10,7 @@ import { parseUsdc } from "@/lib/currency";
 import { friendlyError } from "@/lib/errors";
 import { explorerTxUrl, useLoad, useTabbit, type TabbitContext } from "@/lib/tabbit";
 import { availableToday, CategoryBadge, EmployeeSignIn, fmtTime, NotLinked } from "../employee/shared";
+import { DemoOffer, useDemo } from "../employee/demo";
 
 // Scanner só no cliente (usa câmera).
 const Scanner = dynamic(() => import("@yudiel/react-qr-scanner").then((m) => m.Scanner), { ssr: false });
@@ -111,6 +112,7 @@ function PayFlow({ tabbit, merchant, initialAmount }: { tabbit: TabbitContext; m
     return { m, e };
   }, [client, actor, merchant]);
 
+  const demo = useDemo(!tabbit.isMock);
   const [amountStr, setAmountStr] = useState(initialAmount);
   const [step, setStep] = useState<Step>("edit");
   const [inputErr, setInputErr] = useState("");
@@ -127,7 +129,9 @@ function PayFlow({ tabbit, merchant, initialAmount }: { tabbit: TabbitContext; m
       <Blocked title="Restaurant not available" text="This restaurant is not registered or is not accepting Tabbit right now." />
     );
   if (!e)
-    return (
+    return demo?.enabled ? (
+      <DemoOffer demo={demo} wallet={actor!} onEnrolled={reload} />
+    ) : (
       <NotLinked
         title="No meal benefit linked to this wallet"
         hint="Send this wallet address to your employer so they can add you."

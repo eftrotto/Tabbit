@@ -38,8 +38,8 @@ export function Waitlist() {
             <iframe src={WAITLIST_URL} title="Tabbit waitlist form" loading="lazy" className="mt-10 h-[28rem] w-full rounded-2xl bg-white" />
           ) : (
             <div className="mt-10 flex flex-wrap justify-center gap-3">
-              <Link href="/employer" className="rounded-2xl bg-brand px-7 py-4 font-bold text-ink shadow-[0_0_40px_-8px] shadow-brand transition hover:scale-[1.03]">
-                Try the live demo →
+              <Link href="/employee" className="rounded-2xl bg-brand px-7 py-4 font-bold text-ink shadow-[0_0_40px_-8px] shadow-brand transition hover:scale-[1.03]">
+                Try it as an employee →
               </Link>
               <span className="glass rounded-2xl px-7 py-4 font-semibold text-white/60">Waitlist opening soon</span>
             </div>

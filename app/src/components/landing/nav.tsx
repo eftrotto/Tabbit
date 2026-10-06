@@ -41,7 +41,7 @@ export function LandingNav() {
           ))}
         </div>
         <Link
-          href="/employer"
+          href="/employee"
           className="group ml-auto inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-bold text-ink shadow-[0_0_24px_-4px] shadow-brand/60 transition hover:shadow-brand"
         >
           Launch app

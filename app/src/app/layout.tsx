@@ -10,10 +10,10 @@ const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin", "latin-ext
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://tabbit-sol.vercel.app"),
-  title: "Tabbit — Smart spending, verified.",
+  title: "Tabbit",
   description: "On-chain meal benefits on Solana. Employers fund in USDC, workers pay by QR, restaurants get paid in seconds.",
   openGraph: {
-    title: "Tabbit — Smart spending, verified.",
+    title: "Tabbit",
     description: "Meal benefits with rules enforced on-chain. Restaurants get paid in seconds, for a 0.8% fee.",
   },
 };

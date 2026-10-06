@@ -1,6 +1,6 @@
 <div align="start">
 
-# Tabbit
+# Tabbit 
 
 **Smart spending, verified.**
 On-chain meal benefits. Employers fund in USDC, workers pay by QR, restaurants get paid in seconds. Built on Solana.

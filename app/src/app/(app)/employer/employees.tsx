@@ -9,6 +9,7 @@ import { parseUsdc } from "@/lib/currency";
 import { friendlyError } from "@/lib/errors";
 import { formatWindow } from "@/lib/time";
 import { explorerAddressUrl } from "@/lib/tabbit";
+import type { Directory } from "@/lib/directory";
 import { TxStatus, useTx } from "./tx";
 
 const PAGE = 20;
@@ -28,7 +29,7 @@ function download(name: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-export function EmployeesCard({ client, employer, employees, error, isMock, onChanged, onAdd, onEdit }: {
+export function EmployeesCard({ client, employer, employees, error, isMock, onChanged, onAdd, onEdit, directory }: {
   client: TabbitClient;
   employer: EmployerAccount;
   employees: EmployeeAccount[] | undefined;
@@ -37,6 +38,7 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
   onChanged: () => Promise<unknown>;
   onAdd: () => void;
   onEdit: (e: EmployeeAccount) => void;
+  directory: Directory;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -49,12 +51,16 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (employees ?? [])
-      .filter((e) => !q || e.wallet.toBase58().toLowerCase().includes(q))
+      .filter((e) => {
+        if (!q) return true;
+        const who = directory.entries.get(e.wallet.toBase58());
+        return [e.wallet.toBase58(), who?.name, who?.email, who?.employeeId].some((v) => v?.toLowerCase().includes(q));
+      })
       .filter((e) =>
         filter === "active" ? e.active : filter === "revoked" ? !e.active : filter === "low" ? e.active && e.balance < e.maxPerMeal : true
       )
       .sort((a, b) => Number(b.active) - Number(a.active) || (b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0));
-  }, [employees, query, filter]);
+  }, [employees, query, filter, directory.entries]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const current = Math.min(page, pages - 1);
   const shown = filtered.slice(current * PAGE, current * PAGE + PAGE);
@@ -71,11 +77,11 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
         <button className="btn-primary" disabled={disabled} onClick={onAdd}>Add employee</button>
         <button className="btn-secondary" disabled={disabled} onClick={() => setPanel(panel === "import" ? null : "import")}>Import spreadsheet</button>
         <button className="btn-secondary" disabled={disabled || active.length === 0} onClick={() => setPanel(panel === "topup" ? null : "topup")}>Top up everyone</button>
-        <button className="btn-secondary" disabled={!employees?.length} onClick={() => download("tabbit-employees.csv", employeesToCsv(employees ?? []))}>Export CSV</button>
+        <button className="btn-secondary" disabled={!employees?.length} onClick={() => download("tabbit-employees.csv", employeesToCsv(employees ?? [], directory.status === "ready" ? directory.entries : undefined))}>Export CSV</button>
       </div>
 
       {panel === "import" && (
-        <ImportPanel client={client} employees={employees ?? []} free={free} isMock={isMock} onDone={async () => { setPanel(null); await onChanged(); }} />
+        <ImportPanel client={client} employees={employees ?? []} free={free} isMock={isMock} directory={directory} onDone={async () => { setPanel(null); await onChanged(); }} />
       )}
       {panel === "topup" && (
         <TopUpPanel client={client} active={active} free={free} isMock={isMock} onDone={async () => { setPanel(null); await onChanged(); }} />
@@ -83,7 +89,7 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="sr-only" htmlFor="emp-search">Search</label>
-        <input id="emp-search" className="input !w-auto min-w-0 flex-1 text-sm" placeholder="Search by wallet address" value={query}
+        <input id="emp-search" className="input !w-auto min-w-0 flex-1 text-sm" placeholder={directory.status === "ready" ? "Search by name, email, ID or wallet" : "Search by wallet address"} value={query}
           onChange={(e) => { setQuery(e.target.value); setPage(0); }} />
         <div className="flex gap-1 rounded-xl bg-ink/[0.05] p-1 text-sm" role="group" aria-label="Filter employees">
           {FILTERS.map((f) => (
@@ -96,6 +102,15 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
         </div>
       </div>
       <TxStatus error={revokeTx.error} sig={revokeTx.sig} isMock={isMock} />
+      {(directory.status === "locked" || directory.status === "loading") && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-ink/10 bg-ink/[0.03] p-3 text-sm">
+          <p className="flex-1">Employee names and emails are private: they live off-chain and only your company wallet can open them.</p>
+          <button className="btn-secondary !px-3 !py-1.5 text-sm" disabled={directory.status === "loading"} onClick={() => void directory.unlock()}>
+            {directory.status === "loading" ? "Opening…" : "Show names"}
+          </button>
+        </div>
+      )}
+      <ErrorText>{directory.error}</ErrorText>
 
       {error ? <ErrorText>{friendlyError(error)}</ErrorText>
         : !employees ? <p className="text-sm opacity-60">Loading…</p>
@@ -107,7 +122,7 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
               <table className="w-full min-w-[46rem] text-left text-sm">
                 <thead className="border-b border-ink/10 text-xs opacity-70">
                   <tr>
-                    {["Wallet", "Balance", "Max / meal", "Daily cap", "Spent today", "Meal hours", "Status", ""].map((h, i) => (
+                    {[...(directory.status === "ready" ? ["Employee"] : []), "Wallet", "Balance", "Max / meal", "Daily cap", "Spent today", "Meal hours", "Status", ""].map((h, i) => (
                       <th key={i} className="px-2 py-2 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -115,6 +130,12 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
                 <tbody>
                   {shown.map((e) => (
                     <tr key={e.address.toBase58()} className="border-b border-ink/5 align-top last:border-0">
+                      {directory.status === "ready" && (
+                        <td className="px-2 py-2.5">
+                          <p className="font-medium">{directory.entries.get(e.wallet.toBase58())?.name ?? <span className="opacity-40">No name</span>}</p>
+                          <p className="text-xs opacity-60">{[directory.entries.get(e.wallet.toBase58())?.email, directory.entries.get(e.wallet.toBase58())?.employeeId].filter(Boolean).join(" · ")}</p>
+                        </td>
+                      )}
                       <td className="px-2 py-2.5 font-mono">
                         <a className="underline decoration-ink/30 hover:decoration-ink" href={explorerAddressUrl(e.wallet)} target="_blank" rel="noreferrer">{shortKey(e.wallet)}</a>
                       </td>
@@ -156,8 +177,9 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
   );
 }
 
-function ImportPanel({ client, employees, free, isMock, onDone }: {
+function ImportPanel({ client, employees, free, isMock, onDone, directory }: {
   client: TabbitClient; employees: EmployeeAccount[]; free: bigint; isMock: boolean; onDone: () => Promise<unknown>;
+  directory: Directory;
 }) {
   const [parsed, setParsed] = useState<(CsvResult & { file: string }) | null>(null);
   const tx = useTx();
@@ -193,8 +215,16 @@ function ImportPanel({ client, employees, free, isMock, onDone }: {
             </ul>
           )}
           {extra > free && <ErrorText>Not enough unallocated funds. Deposit more or lower the balances.</ErrorText>}
+          {parsed.people.length > 0 && directory.status !== "ready" && directory.status !== "off" && (
+            <p className="rounded-lg bg-amber-50 p-2 text-amber-900">This file has names and emails. Click <b>Show names</b> above first, or only the benefits will be saved.</p>
+          )}
           <button className="btn-primary" disabled={tx.pending || parsed.rows.length === 0 || extra > free}
-            onClick={() => void tx.run(async () => (await client.upsertEmployees(parsed.rows)).at(-1) ?? "", onDone)}>
+            onClick={() => void tx.run(async () => {
+              const sigs = await client.upsertEmployees(parsed.rows);
+              // Depois do benefício on-chain, os nomes (se a planilha trouxer e o diretório estiver aberto)
+              if (parsed.people.length && directory.status === "ready") await directory.save(parsed.people);
+              return sigs.at(-1) ?? "";
+            }, onDone)}>
             {tx.pending ? "Saving…" : `Save ${parsed.rows.length} employees`}
           </button>
           <p className="text-xs opacity-60">Your wallet asks for one approval; employees are saved in batches of 8 per transaction.</p>

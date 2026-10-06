@@ -6,6 +6,7 @@ import type { EmployeeAccount, TabbitClient } from "@tabbit/sdk";
 import { Card, Money } from "@/components/ui";
 import { parseUsdc, usdcToInput } from "@/lib/currency";
 import { hhmmToMin, minToHHMM } from "@/lib/time";
+import type { Directory } from "@/lib/directory";
 import { TxStatus, useTx } from "./tx";
 
 interface Props {
@@ -15,9 +16,16 @@ interface Props {
   editing: EmployeeAccount | null; // null = novo
   onSaved: () => Promise<unknown> | void;
   onCancel: () => void;
+  /** Nomes fora da blockchain; os campos só aparecem com o diretório liberado. */
+  directory: Directory;
 }
 
-export function EmployeeForm({ client, isMock, unallocated, editing, onSaved, onCancel }: Props) {
+export function EmployeeForm({ client, isMock, unallocated, editing, onSaved, onCancel, directory }: Props) {
+  const known = editing ? directory.entries.get(editing.wallet.toBase58()) : undefined;
+  const [name, setName] = useState(known?.name ?? "");
+  const [email, setEmail] = useState(known?.email ?? "");
+  const [employeeId, setEmployeeId] = useState(known?.employeeId ?? "");
+  const withNames = directory.status === "ready";
   const hasWindow = !!editing && (editing.windowStartMin !== 0 || editing.windowEndMin !== 0);
   const [wallet, setWallet] = useState(editing?.wallet.toBase58() ?? "");
   const [balance, setBalance] = useState(editing ? usdcToInput(editing.balance) : "");
@@ -47,11 +55,14 @@ export function EmployeeForm({ client, isMock, unallocated, editing, onSaved, on
     const s = restrict ? hhmmToMin(start) : 0;
     const en = restrict ? hhmmToMin(end) : 0;
     if (restrict && (Number.isNaN(s) || Number.isNaN(en) || s >= en)) return tx.setError("Meal hours: start must be before end");
+    if (withNames && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return tx.setError("Enter a valid email or leave it empty");
     tx.run(
       () => client.upsertEmployee({ wallet: pk, balance: b, maxPerMeal: m, dailyCap: d, windowStartMin: s, windowEndMin: en }),
       async () => {
+        // Primeiro a blockchain (o benefício); depois o nome, fora dela
+        if (withNames) await directory.save([{ wallet: pk.toBase58(), name, email, employeeId }]);
         await onSaved();
-        if (!editing) { setWallet(""); setBalance(""); setMaxPerMeal(""); setDailyCap(""); }
+        if (!editing) { setWallet(""); setBalance(""); setMaxPerMeal(""); setDailyCap(""); setName(""); setEmail(""); setEmployeeId(""); }
       }
     );
   }
@@ -59,6 +70,22 @@ export function EmployeeForm({ client, isMock, unallocated, editing, onSaved, on
   return (
     <Card title={editing ? "Edit employee" : "Add employee"}>
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-3">
+        {withNames && (
+          <>
+            <div>
+              <label className="label" htmlFor="ef-name">Name</label>
+              <input id="ef-name" className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Maria Souza" maxLength={100} autoComplete="off" />
+            </div>
+            <div>
+              <label className="label" htmlFor="ef-email">Email</label>
+              <input id="ef-email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="maria@company.com" maxLength={200} autoComplete="off" />
+            </div>
+            <div>
+              <label className="label" htmlFor="ef-id">Employee ID</label>
+              <input id="ef-id" className="input" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder="Optional" maxLength={50} autoComplete="off" />
+            </div>
+          </>
+        )}
         <div className="sm:col-span-3">
           <label className="label" htmlFor="ef-wallet">Wallet address</label>
           <input id="ef-wallet" className="input font-mono text-sm read-only:bg-ink/5" value={wallet} readOnly={!!editing}

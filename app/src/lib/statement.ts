@@ -74,13 +74,14 @@ export function buildStatement(payments: Payment[], refunds: Refund[]): Statemen
 const iso = (unix: number) => new Date((unix + TZ_MINUTES * 60) * 1000).toISOString().slice(0, 16).replace("T", " ");
 const csvCell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
-/** CSV do extrato. Horário de Brasília; valores em USDC; estornos com valor negativo. */
-export function statementCsv(rows: StatementRow[], merchantNames: Record<string, string>): string {
-  const head = ["date_brt", "type", "employee_wallet", "restaurant", "amount_usdc", "restaurant_fee_usdc", "transaction"];
+/** CSV do extrato. Horário de Brasília; valores em USDC; estornos com valor negativo. Com `employeeNames`, inclui o nome. */
+export function statementCsv(rows: StatementRow[], merchantNames: Record<string, string>, employeeNames?: Map<string, string | null>): string {
+  const head = ["date_brt", "type", ...(employeeNames ? ["employee_name"] : []), "employee_wallet", "restaurant", "amount_usdc", "restaurant_fee_usdc", "transaction"];
   const body = rows.map((r) =>
     [
       iso(r.timestamp),
       r.kind,
+      ...(employeeNames ? [employeeNames.get(r.employee) ?? ""] : []),
       r.employee,
       merchantNames[r.merchant] ?? r.merchant,
       (r.kind === "refund" ? "-" : "") + usdcToInput(r.amount),

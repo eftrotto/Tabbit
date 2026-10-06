@@ -101,6 +101,24 @@ describe("sdk", () => {
     }
   });
 
+  it("restaurante estorna um pagamento e o histórico liga o estorno ao pagamento", async () => {
+    const sig = await connection.requestAirdrop(bistro.publicKey, LAMPORTS_PER_SOL);
+    await connection.confirmTransaction(sig, "confirmed");
+    const readOnly = createTabbitClient({ connection });
+    const asBistro = createTabbitClient({ connection, wallet: walletOf(bistro) });
+    const paid = (await readOnly.listPayments({ merchant: bistro.publicKey })).find((p) => p.employee.equals(ana.publicKey))!;
+    const before = (await readOnly.getEmployeeByWallet(ana.publicKey))!.balance;
+
+    await asBistro.refund({ employee: ana.publicKey, amount: U(5), reference: paid.signature });
+
+    expect((await readOnly.getEmployeeByWallet(ana.publicKey))!.balance).to.equal(before + U(5));
+    const refunds = await readOnly.listRefunds({ merchant: bistro.publicKey });
+    expect(refunds.length).to.equal(1);
+    expect(refunds[0].reference).to.equal(paid.signature);
+    expect(refunds[0].amount).to.equal(U(5));
+    expect((await readOnly.listRefunds({ employee: ana.publicKey }))[0].reference).to.equal(paid.signature);
+  });
+
   it("cadastra vários funcionários de uma vez (planilha), em poucas transações", async () => {
     const asBoss = createTabbitClient({ connection, wallet: walletOf(boss) });
     const team = Array.from({ length: 10 }, () => Keypair.generate().publicKey);

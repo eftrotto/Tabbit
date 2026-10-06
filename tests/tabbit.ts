@@ -99,6 +99,21 @@ describe("tabbit", () => {
       .rpc();
   }
 
+  function refund(merchantKp: Keypair, employeeWallet: PublicKey, amount: BN) {
+    return program.methods
+      .refund(amount, Array.from(Buffer.alloc(64, 7)))
+      .accountsPartial({
+        merchantWallet: merchantKp.publicKey,
+        merchant: merchantPda(merchantKp.publicKey),
+        employer: employerPda,
+        employee: employeePda(employeeWallet),
+        vault,
+        merchantToken: getAssociatedTokenAddressSync(mint, merchantKp.publicKey),
+      })
+      .signers([merchantKp])
+      .rpc();
+  }
+
   function upsert(wallet: PublicKey, balance: BN, maxPerMeal: BN, dailyCap: BN, ws = 0, we = 0) {
     return program.methods
       .upsertEmployee(wallet, balance, maxPerMeal, dailyCap, ws, we)
@@ -326,6 +341,46 @@ describe("tabbit", () => {
     }
   });
 
+  it("restaurante estorna 10 de João: volta ao cofre, ao saldo e ao gasto do dia", async () => {
+    await airdrop(restaurant.publicKey, 1);
+    const before = {
+      restaurant: await balanceOf(restaurantToken),
+      vault: await balanceOf(vault),
+      emp: await program.account.employee.fetch(employeePda(joao.publicKey)),
+      employer: await program.account.employer.fetch(employerPda),
+    };
+    await refund(restaurant, joao.publicKey, USDC(10));
+    expect(await balanceOf(restaurantToken)).to.equal(before.restaurant - 10_000_000);
+    expect(await balanceOf(vault)).to.equal(before.vault + 10_000_000);
+    const emp = await program.account.employee.fetch(employeePda(joao.publicKey));
+    expect(emp.balance.toNumber()).to.equal(before.emp.balance.toNumber() + 10_000_000);
+    expect(emp.spentToday.toNumber()).to.equal(before.emp.spentToday.toNumber() - 10_000_000);
+    const e = await program.account.employer.fetch(employerPda);
+    expect(e.totalDeposited.toNumber()).to.equal(before.employer.totalDeposited.toNumber() + 10_000_000);
+    expect(e.totalAllocated.toNumber()).to.equal(before.employer.totalAllocated.toNumber() + 10_000_000);
+  });
+
+  it("só o próprio restaurante estorna, com o dinheiro dele", async () => {
+    // outsider assina como se fosse o restaurante: a conta Merchant não bate com quem assina
+    try {
+      await program.methods
+        .refund(USDC(1), Array.from(Buffer.alloc(64)))
+        .accountsPartial({
+          merchantWallet: outsider.publicKey,
+          merchant: merchantPda(restaurant.publicKey),
+          employer: employerPda,
+          employee: employeePda(joao.publicKey),
+          vault,
+          merchantToken: restaurantToken,
+        })
+        .signers([outsider])
+        .rpc();
+      expect.fail("deveria falhar");
+    } catch (e: any) {
+      expect(String(e)).to.match(/ConstraintSeeds|Unauthorized|ConstraintTokenOwner|seeds/i);
+    }
+  });
+
   it("revoga João e devolve o saldo ao cofre", async () => {
     await program.methods
       .revokeEmployee()
@@ -336,6 +391,8 @@ describe("tabbit", () => {
     expect(emp.balance.toNumber()).to.equal(0);
     expect(emp.active).to.equal(false);
     await expectError(pay(joao, restaurant.publicKey, restaurantToken, USDC(5)), "EmployeeInactive");
+    // funcionário revogado não recebe estorno: o saldo dele já voltou para a empresa
+    await expectError(refund(restaurant, joao.publicKey, USDC(1)), "EmployeeInactive");
   });
 
   it("empresa saca só o que não está alocado", async () => {

@@ -8,6 +8,8 @@ import { parseUsdc, usdcToInput } from "@/lib/currency";
 import { friendlyError } from "@/lib/errors";
 import { explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
 import { ConnectCard, CopyButton, NotLinked } from "../employee/shared";
+import { TxStatus, useTx } from "../employer/tx";
+import { useCurrency } from "@/components/providers";
 
 export default function MerchantPage() {
   const { client, actor, isMock, isDemoPersona } = useTabbit("merchant");
@@ -34,7 +36,7 @@ export default function MerchantPage() {
       {banner}
       <h1 className="text-2xl font-bold">{merchant.name}</h1>
       <QrCard wallet={actor.toBase58()} name={merchant.name} />
-      <Sales client={client} actor={actor} />
+      <Sales client={client} actor={actor} isMock={isMock} />
     </div>
   );
 }
@@ -70,8 +72,12 @@ function QrCard({ wallet, name }: { wallet: string; name: string }) {
   );
 }
 
-function Sales({ client, actor }: { client: TabbitClient; actor: PublicKey }) {
+function Sales({ client, actor, isMock }: { client: TabbitClient; actor: PublicKey; isMock: boolean }) {
   const { data: initial } = useLoad(() => client.listPayments({ merchant: actor, limit: 50 }), [client, actor]);
+  const refunds = useLoad(() => client.listRefunds({ merchant: actor, limit: 50 }), [client, actor]);
+  const refundTx = useTx();
+  const [refunding, setRefunding] = useState<string | null>(null);
+  const { fiat } = useCurrency();
   const [live, setLive] = useState<Payment[]>([]);
   const [fresh, setFresh] = useState<string[]>([]);
 
@@ -93,15 +99,28 @@ function Sales({ client, actor }: { client: TabbitClient; actor: PublicKey }) {
 
   const gross = today.reduce((s, p) => s + p.amount, 0n);
   const fees = today.reduce((s, p) => s + p.fee, 0n);
+  const refundedRefs = new Set((refunds.data ?? []).map((r) => r.reference));
+  const refundedToday = (refunds.data ?? []).filter((r) => r.timestamp >= startOfDay).reduce((s, r) => s + r.amount, 0n);
+
+  // Estorno do valor cheio, de volta para o saldo do funcionário (o restaurante assina e paga a taxa)
+  function refund(p: Payment) {
+    if (!confirm(`Refund ${fiat(p.amount)} to this employee? The money leaves your account and goes back to their meal balance.`)) return;
+    setRefunding(p.signature);
+    void refundTx
+      .run(() => client.refund({ employee: p.employee, amount: p.amount, reference: p.signature }), refunds.reload)
+      .finally(() => setRefunding(null));
+  }
 
   return (
     <Card title="Today's sales">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Gross sales" value={<Money base={gross} />} />
-        <Stat label="Net received" value={<Money base={gross - fees} />} strong />
+        <Stat label="Net received" value={<Money base={gross - fees - refundedToday} />} strong />
         <Stat label="Fees paid (0.8%)" value={<Money base={fees} />} />
         <Stat label="Sales" value={today.length} />
       </div>
+      {refundedToday > 0n && <p className="mt-3 text-sm opacity-70">Net is after <Money base={refundedToday} /> refunded today.</p>}
+      <div className="mt-2"><TxStatus error={refundTx.error} sig={refundTx.sig} isMock={isMock} /></div>
       {today.length === 0 && <p className="mt-4 text-sm opacity-60">No sales yet today. New payments appear here instantly.</p>}
       <ul className="mt-4 divide-y divide-ink/10">
         {today.map((p) => {
@@ -118,7 +137,16 @@ function Sales({ client, actor }: { client: TabbitClient; actor: PublicKey }) {
                   <a className="underline" href={explorerTxUrl(p.signature)} target="_blank" rel="noreferrer">Explorer</a>
                 </p>
               </div>
-              <Money base={p.amount} className="shrink-0 font-semibold" />
+              <div className="flex shrink-0 items-center gap-3">
+                {refundedRefs.has(p.signature) ? (
+                  <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-semibold">Refunded</span>
+                ) : (
+                  <button className="text-xs underline disabled:opacity-50" disabled={refunding !== null} onClick={() => refund(p)}>
+                    {refunding === p.signature ? "Refunding…" : "Refund"}
+                  </button>
+                )}
+                <Money base={p.amount} className={`font-semibold ${refundedRefs.has(p.signature) ? "line-through opacity-50" : ""}`} />
+              </div>
             </li>
           );
         })}

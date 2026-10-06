@@ -1,5 +1,5 @@
 // Cliente real do Tabbit: implementa a interface TabbitClient (types.ts) falando com o programa on-chain.
-import { AnchorError, AnchorProvider, BN, EventParser, Program } from "@coral-xyz/anchor";
+import { AnchorError, AnchorProvider, BN, EventParser, Program, utils } from "@coral-xyz/anchor";
 import {
   createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
@@ -19,6 +19,7 @@ import {
   type EmployerAccount,
   type MerchantAccount,
   type Payment,
+  type Refund,
   type TabbitClient,
   type TabbitErrorCode,
   type UpsertEmployeeInput,
@@ -180,26 +181,43 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
   const eventParser = new EventParser(program.programId, program.coder);
 
-  function paymentsFromLogs(signature: string, logs: string[]): Payment[] {
-    const out: Payment[] = [];
+  interface TxEvents {
+    payments: Payment[];
+    refunds: Refund[];
+  }
+
+  function eventsFromLogs(signature: string, logs: string[]): TxEvents {
+    const out: TxEvents = { payments: [], refunds: [] };
     for (const ev of eventParser.parseLogs(logs)) {
-      if (ev.name !== "paymentMade") continue;
       const d = ev.data as any;
-      out.push({
-        signature,
-        employer: d.employer,
-        employee: d.employee,
-        merchant: d.merchant,
-        amount: toBig(d.amount),
-        fee: toBig(d.fee),
-        timestamp: d.timestamp.toNumber(),
-      });
+      if (ev.name === "paymentMade")
+        out.payments.push({
+          signature,
+          employer: d.employer,
+          employee: d.employee,
+          merchant: d.merchant,
+          amount: toBig(d.amount),
+          fee: toBig(d.fee),
+          timestamp: d.timestamp.toNumber(),
+        });
+      else if (ev.name === "refundMade")
+        out.refunds.push({
+          signature,
+          employer: d.employer,
+          employee: d.employee,
+          merchant: d.merchant,
+          amount: toBig(d.amount),
+          reference: utils.bytes.bs58.encode(Buffer.from(d.reference)),
+          timestamp: d.timestamp.toNumber(),
+        });
     }
     return out;
   }
 
-  // Transações confirmadas não mudam: guarda os pagamentos já lidos de cada assinatura
-  const paymentsBySig = new Map<string, Payment[]>();
+  const paymentsFromLogs = (signature: string, logs: string[]) => eventsFromLogs(signature, logs).payments;
+
+  // Transações confirmadas não mudam: guarda os eventos já lidos de cada assinatura
+  const eventsBySig = new Map<string, TxEvents>();
 
   // A RPC pública da devnet responde 429 quando recebe muitas chamadas seguidas
   async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
@@ -213,8 +231,8 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     }
   }
 
-  async function paymentsOf(signatures: string[]): Promise<Payment[]> {
-    const missing = signatures.filter((s) => !paymentsBySig.has(s));
+  async function eventsOf(signatures: string[]): Promise<TxEvents> {
+    const missing = signatures.filter((s) => !eventsBySig.has(s));
     // Sem getTransactions em lote (a RPC pública recusa); busca uma por vez
     for (let i = 0; i < missing.length; i += 1) {
       await Promise.all(
@@ -224,11 +242,31 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
           );
           if (!tx) return; // ainda não indexada; tenta de novo na próxima leitura
           const logs = tx.meta?.logMessages;
-          paymentsBySig.set(sig, logs ? paymentsFromLogs(sig, logs) : []);
+          eventsBySig.set(sig, logs ? eventsFromLogs(sig, logs) : { payments: [], refunds: [] });
         })
       );
     }
-    return signatures.flatMap((s) => paymentsBySig.get(s) ?? []);
+    const found = signatures.map((s) => eventsBySig.get(s));
+    return { payments: found.flatMap((e) => e?.payments ?? []), refunds: found.flatMap((e) => e?.refunds ?? []) };
+  }
+
+  /** Conta mais específica para buscar o histórico (todo pagamento/estorno passa por ela). */
+  async function historyAddress(filter: { merchant?: PublicKey; employee?: PublicKey; employer?: PublicKey }): Promise<PublicKey | null> {
+    if (filter.merchant) return findMerchantPda(filter.merchant, program.programId);
+    if (filter.employee) return (await client.getEmployeeByWallet(filter.employee))?.address ?? null;
+    if (filter.employer) return filter.employer;
+    return program.programId;
+  }
+
+  async function historyEvents(filter: { merchant?: PublicKey; employee?: PublicKey; employer?: PublicKey; limit?: number }) {
+    const address = await historyAddress(filter);
+    if (!address) return { payments: [], refunds: [] };
+    const limit = filter.limit ?? 50;
+    // A conta da empresa também aparece em depósitos e cadastros: busca mais assinaturas que o limite
+    const sigs = await withRetry(() =>
+      connection.getSignaturesForAddress(address, { limit: Math.min(limit * 3, 100) }, "confirmed")
+    );
+    return eventsOf(sigs.filter((s) => !s.err).map((s) => s.signature));
   }
 
   // Simula antes de pedir a assinatura: se o programa recusar (limite, saldo, horário...),
@@ -256,6 +294,19 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     if (!(await isApproved(employer))) throw new TabbitError("EmployerNotApproved", "This company is not approved by Tabbit yet");
   }
 
+  // "Blockhash not found" é recusado na checagem prévia da RPC, antes de a transação ir para a rede:
+  // tentar de novo (com blockhash novo) não tem como executar duas vezes.
+  async function rpcWithFreshBlockhash(builder: { rpc(): Promise<TransactionSignature> }, tries = 3): Promise<TransactionSignature> {
+    for (let i = 0; ; i++) {
+      try {
+        return await builder.rpc();
+      } catch (e) {
+        if (i >= tries - 1 || !/blockhash not found/i.test(String(e))) throw e;
+        await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+      }
+    }
+  }
+
   async function simulate(tx: Transaction) {
     const sim = await connection.simulateTransaction(tx);
     if (sim.value.err) {
@@ -274,7 +325,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const tx = await builder.transaction();
       tx.feePayer = me();
       await simulate(tx);
-      return await builder.rpc();
+      return await rpcWithFreshBlockhash(builder);
     } catch (e) {
       mapError(e);
     }
@@ -297,7 +348,7 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     }
   }
 
-  return {
+  const client: TabbitClient = {
     // ---------- leitura ----------
 
     getConfig(): Promise<ConfigAccount> {
@@ -358,29 +409,23 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     },
 
     async listPayments(filter) {
-      // Busca pelo endereço mais específico disponível
-      let address: PublicKey;
-      if (filter.merchant) address = findMerchantPda(filter.merchant, program.programId);
-      else if (filter.employee) {
-        const emp = await this.getEmployeeByWallet(filter.employee);
-        if (!emp) return [];
-        address = emp.address;
-      } else if (filter.employer) address = filter.employer;
-      else address = program.programId;
-
       const limit = filter.limit ?? 50;
-      // A conta da empresa também aparece em depósitos e cadastros: busca mais assinaturas que o limite
-      const sigs = await withRetry(() =>
-        connection.getSignaturesForAddress(address, { limit: Math.min(limit * 3, 100) }, "confirmed")
-      );
-      const payments = await paymentsOf(sigs.filter((s) => !s.err).map((s) => s.signature));
-
+      const { payments } = await historyEvents(filter);
       return payments
         .filter((p) => !filter.merchant || p.merchant.equals(filter.merchant))
         .filter((p) => !filter.employee || p.employee.equals(filter.employee))
         .filter((p) => !filter.employer || p.employer.equals(filter.employer))
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, limit);
+    },
+
+    async listRefunds(filter) {
+      const { refunds } = await historyEvents(filter);
+      return refunds
+        .filter((r) => !filter.merchant || r.merchant.equals(filter.merchant))
+        .filter((r) => !filter.employee || r.employee.equals(filter.employee))
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, filter.limit ?? 50);
     },
 
     onPayment(cb) {
@@ -576,5 +621,27 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
         .preInstructions(pre);
       return opts.sponsor ? sendSponsored(builder, opts.sponsor) : send(builder);
     },
+
+    async refund({ employee, amount, reference }) {
+      const merchantWallet = me();
+      const emp = await this.getEmployeeByWallet(employee);
+      if (!emp) throw new TabbitError("EmployeeInactive", "This employee has no meal benefit");
+      const employer = await program.account.employer.fetch(emp.employer);
+      const ref = utils.bytes.bs58.decode(reference);
+      if (ref.length !== 64) throw new TabbitError("InvalidAmount", "Invalid payment reference");
+      return send(
+        program.methods
+          .refund(toBN(amount), Array.from(ref))
+          .accountsPartial({
+            merchantWallet,
+            merchant: findMerchantPda(merchantWallet, program.programId),
+            employer: emp.employer,
+            employee: emp.address,
+            vault: employer.vault,
+            merchantToken: getAssociatedTokenAddressSync(employer.mint, merchantWallet),
+          })
+      );
+    },
   };
+  return client;
 }

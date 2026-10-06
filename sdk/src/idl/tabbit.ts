@@ -352,6 +352,144 @@ export type Tabbit = {
       ]
     },
     {
+      "name": "refund",
+      "discriminator": [
+        2,
+        96,
+        183,
+        251,
+        63,
+        208,
+        46,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "merchantWallet",
+          "docs": [
+            "Carteira do restaurante."
+          ],
+          "signer": true
+        },
+        {
+          "name": "merchant",
+          "docs": [
+            "Restaurante descredenciado ainda pode devolver o que recebeu."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  114,
+                  99,
+                  104,
+                  97,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "merchantWallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "employer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  112,
+                  108,
+                  111,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "employer.owner",
+                "account": "employer"
+              }
+            ]
+          },
+          "relations": [
+            "employee"
+          ]
+        },
+        {
+          "name": "employee",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  109,
+                  112,
+                  108,
+                  111,
+                  121,
+                  101,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "employer"
+              },
+              {
+                "kind": "account",
+                "path": "employee.wallet",
+                "account": "employee"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "employer"
+          ]
+        },
+        {
+          "name": "merchantToken",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "reference",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "registerEmployer",
       "discriminator": [
         154,
@@ -1207,6 +1345,19 @@ export type Tabbit = {
         83,
         242
       ]
+    },
+    {
+      "name": "refundMade",
+      "discriminator": [
+        16,
+        154,
+        174,
+        197,
+        137,
+        92,
+        176,
+        1
+      ]
     }
   ],
   "errors": [
@@ -1519,6 +1670,52 @@ export type Tabbit = {
           {
             "name": "fee",
             "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "refundMade",
+      "docs": [
+        "Emitido a cada `refund`. `reference` é a assinatura do pagamento estornado (64 bytes)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "employer",
+            "type": "pubkey"
+          },
+          {
+            "name": "employee",
+            "docs": [
+              "wallet do funcionário"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "merchant",
+            "docs": [
+              "wallet do restaurante"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reference",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
           },
           {
             "name": "timestamp",

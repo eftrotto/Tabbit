@@ -106,7 +106,8 @@ function Loading() {
   const message = LOADING_STEPS.filter(([at]) => elapsed >= at).at(-1)![1];
   return (
     <div role="status" aria-live="polite" className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-      <ThinkingOrb state="searching" size={64} theme="light" color="#07574f" aria-label="Loading network data" />
+      {/* Desenho de 64 px ampliado: o componente só tem presets de 20, 32 e 64 */}
+      <ThinkingOrb state="solving" size={64} theme="light" color="#07574f" style={{ width: 128, height: 128 }} aria-label="Loading network data" />
       <p className="text-lg font-semibold">{message}</p>
       <p className="max-w-sm text-sm opacity-60">Every number is read live from the chain, nothing is pre-computed.</p>
     </div>

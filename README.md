@@ -52,10 +52,12 @@ Benefit money never sits in the employee's wallet. Their balance is a number in 
 | **Company (HR)** | Register and wait for approval; vault (deposit / withdraw unallocated); add, edit, revoke employees; **import a spreadsheet** (CSV, Excel `;` and decimal comma) with per-line errors; **monthly top-up** for everyone; search, filters, pagination, CSV export |
 | **Restaurant** | Payment QR (fixed or with a preset amount); today's sales updating live; gross, net and fees |
 | **Tabbit (platform)** | `/admin`: approve or suspend companies, register and toggle restaurants, emergency pause, fee-payer balance |
+| **Visitors / judges** | "Try it as an employee": sign in and get a devnet demo benefit from a demo company, then pay a demo restaurant |
 | **Anyone** | [`/transparency`](https://tabbit-sol.vercel.app/transparency): total paid, what restaurants saved vs the 3.6% market cap, **proof that vault balances cover every allocated benefit**, paid per day, latest payments appearing live |
 
 ## Try it
 
+- **As an employee, in one minute:** open [tabbit-sol.vercel.app/employee](https://tabbit-sol.vercel.app/employee), sign in with email or Google and tap **Get my demo benefit**. A demo company gives you a test balance; pay any restaurant on the list. You need no wallet app and no SOL, and your payment shows up live on the transparency page.
 - **Live network:** open [tabbit-sol.vercel.app/transparency](https://tabbit-sol.vercel.app/transparency). Every number links back to Solana Explorer.
 - **Program on devnet:** [`Gs1shhur…JvEFBn`](https://explorer.solana.com/address/Gs1shhurWMwnqzzjdxtMkYMcXwXYDbaSd6hP74JvEFBn?cluster=devnet). Each payment's logs show a `PaymentMade` event; failed rule checks never land.
 - **Every screen without a wallet:** run the app locally in demo mode (below). Each view acts as a demo persona: company, employee, restaurant and platform.
@@ -122,6 +124,7 @@ Demo mode keeps everything in the browser and mirrors the program's rules, so ev
 | `NEXT_PUBLIC_USE_MOCK=false` | Real devnet | Anything else (or unset) means demo mode |
 | `NEXT_PUBLIC_RPC_URL` | Optional | Defaults to the public devnet RPC, which is slow and rate-limited; a Helius devnet URL is much better |
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Employee login with email / Google | Public value. Without it, employees use Phantom |
+| `DEMO_EMPLOYER_SECRET_KEY` | "Try it as an employee" | **Secret.** JSON array of the demo company owner's keypair (devnet only). Without it, the demo offer is hidden |
 | `SPONSOR_SECRET_KEY` | Gasless payments | **Secret.** JSON array of the fee-payer keypair (fund it with devnet SOL). Without it, employees pay their own fee |
 | `NEXT_PUBLIC_WAITLIST_URL` | Optional | Waitlist form embedded on the landing |
 | `NEXT_PUBLIC_RATE_BRL` / `NEXT_PUBLIC_RATE_EUR` | Optional | Display rate for local currency (default 5.4 / 0.92) |
@@ -156,6 +159,7 @@ Team docs (Portuguese): [`docs/IMPLEMENTACAO.md`](docs/IMPLEMENTACAO.md) and [`d
 - [x] Company approval, official token, platform admin
 - [x] Spreadsheet import and monthly top-up
 - [x] Public transparency page with proof of reserves
+- [x] "Try it as an employee" demo benefit for visitors
 - [ ] Refunds from the restaurant
 - [ ] Employee names and email invites (off-chain directory)
 - [ ] Platform key in a Squads multisig

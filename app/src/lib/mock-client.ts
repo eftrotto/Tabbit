@@ -232,21 +232,28 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
       const row = load().merchants.find((m) => m.wallet === wallet.toBase58());
       return row ? toMerchant(row) : null;
     },
-    async listPayments({ merchant, employee, employer, limit }) {
+    async listPayments({ merchant, employee, employer, limit, since, until }) {
       return load()
         .payments.filter(
           (p) =>
             (!merchant || p.merchant === merchant.toBase58()) &&
             (!employee || p.employee === employee.toBase58()) &&
-            (!employer || p.employer === employer.toBase58())
+            (!employer || p.employer === employer.toBase58()) &&
+            (since === undefined || (p.timestamp >= since && p.timestamp < (until ?? Infinity)))
         )
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, limit ?? Infinity)
         .map(toPayment);
     },
-    async listRefunds({ merchant, employee, limit }) {
+    async listRefunds({ merchant, employee, employer, limit, since, until }) {
       return load()
-        .refunds.filter((r) => (!merchant || r.merchant === merchant.toBase58()) && (!employee || r.employee === employee.toBase58()))
+        .refunds.filter(
+          (r) =>
+            (!merchant || r.merchant === merchant.toBase58()) &&
+            (!employee || r.employee === employee.toBase58()) &&
+            (!employer || r.employer === employer.toBase58()) &&
+            (since === undefined || (r.timestamp >= since && r.timestamp < (until ?? Infinity)))
+        )
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, limit ?? Infinity)
         .map((r): Refund => ({ ...r, employer: pk(r.employer), employee: pk(r.employee), merchant: pk(r.merchant) }));

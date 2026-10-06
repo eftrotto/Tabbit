@@ -181,6 +181,8 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
 
   const eventParser = new EventParser(program.programId, program.coder);
 
+  type HistoryFilter = { merchant?: PublicKey; employee?: PublicKey; employer?: PublicKey; limit?: number; since?: number; until?: number };
+
   interface TxEvents {
     payments: Payment[];
     refunds: Refund[];
@@ -231,21 +233,27 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     }
   }
 
-  async function eventsOf(signatures: string[]): Promise<TxEvents> {
-    const missing = signatures.filter((s) => !eventsBySig.has(s));
-    // Sem getTransactions em lote (a RPC pública recusa); busca uma por vez
-    for (let i = 0; i < missing.length; i += 1) {
-      await Promise.all(
-        missing.slice(i, i + 1).map(async (sig) => {
-          const tx = await withRetry(() =>
-            connection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 })
-          );
+  // Leituras em andamento: pagamentos e estornos pedidos juntos (extrato) não buscam a mesma transação duas vezes
+  const reading = new Map<string, Promise<void>>();
+
+  function readTx(sig: string): Promise<void> {
+    let p = reading.get(sig);
+    if (!p) {
+      p = withRetry(() => connection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }))
+        .then((tx) => {
           if (!tx) return; // ainda não indexada; tenta de novo na próxima leitura
           const logs = tx.meta?.logMessages;
           eventsBySig.set(sig, logs ? eventsFromLogs(sig, logs) : { payments: [], refunds: [] });
         })
-      );
+        .finally(() => reading.delete(sig));
+      reading.set(sig, p);
     }
+    return p;
+  }
+
+  async function eventsOf(signatures: string[]): Promise<TxEvents> {
+    // Sem getTransactions em lote (a RPC pública recusa); busca uma por vez
+    for (const sig of signatures) if (!eventsBySig.has(sig)) await readTx(sig);
     const found = signatures.map((s) => eventsBySig.get(s));
     return { payments: found.flatMap((e) => e?.payments ?? []), refunds: found.flatMap((e) => e?.refunds ?? []) };
   }
@@ -258,15 +266,32 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
     return program.programId;
   }
 
-  async function historyEvents(filter: { merchant?: PublicKey; employee?: PublicKey; employer?: PublicKey; limit?: number }) {
+  async function historyEvents(filter: HistoryFilter) {
     const address = await historyAddress(filter);
     if (!address) return { payments: [], refunds: [] };
+    if (filter.since !== undefined) return eventsOf(await signaturesInRange(address, filter.since, filter.until));
     const limit = filter.limit ?? 50;
     // A conta da empresa também aparece em depósitos e cadastros: busca mais assinaturas que o limite
     const sigs = await withRetry(() =>
       connection.getSignaturesForAddress(address, { limit: Math.min(limit * 3, 100) }, "confirmed")
     );
     return eventsOf(sigs.filter((s) => !s.err).map((s) => s.signature));
+  }
+
+  /** Assinaturas de um período (extrato): pagina para trás até passar do início do período. */
+  async function signaturesInRange(address: PublicKey, since: number, until = Infinity): Promise<string[]> {
+    const out: string[] = [];
+    let before: string | undefined;
+    for (;;) {
+      const page = await withRetry(() => connection.getSignaturesForAddress(address, { limit: 1000, before }, "confirmed"));
+      for (const s of page) {
+        const t = s.blockTime ?? 0;
+        if (!s.err && t >= since && t < until) out.push(s.signature);
+      }
+      const oldest = page.at(-1);
+      if (page.length < 1000 || !oldest || (oldest.blockTime ?? 0) < since) return out;
+      before = oldest.signature;
+    }
   }
 
   // Simula antes de pedir a assinatura: se o programa recusar (limite, saldo, horário...),
@@ -415,8 +440,9 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
         .filter((p) => !filter.merchant || p.merchant.equals(filter.merchant))
         .filter((p) => !filter.employee || p.employee.equals(filter.employee))
         .filter((p) => !filter.employer || p.employer.equals(filter.employer))
+        .filter((p) => filter.since === undefined || (p.timestamp >= filter.since && p.timestamp < (filter.until ?? Infinity)))
         .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, limit);
+        .slice(0, filter.since === undefined ? limit : undefined);
     },
 
     async listRefunds(filter) {
@@ -424,8 +450,10 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       return refunds
         .filter((r) => !filter.merchant || r.merchant.equals(filter.merchant))
         .filter((r) => !filter.employee || r.employee.equals(filter.employee))
+        .filter((r) => !filter.employer || r.employer.equals(filter.employer))
+        .filter((r) => filter.since === undefined || (r.timestamp >= filter.since && r.timestamp < (filter.until ?? Infinity)))
         .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, filter.limit ?? 50);
+        .slice(0, filter.since === undefined ? filter.limit ?? 50 : undefined);
     },
 
     onPayment(cb) {

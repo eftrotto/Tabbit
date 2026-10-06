@@ -48,9 +48,9 @@ Benefit money never sits in the employee's wallet. Their balance is a number in 
 
 | Who | What they get |
 |---|---|
-| **Employee** | Sign in with email, Google or SMS ([Privy](https://privy.io) embedded wallet); pay by QR with 0 SOL (gasless); balance, today's limit, history; their wallet address, Explorer link and private-key export |
-| **Company (HR)** | Register and wait for approval; vault (deposit / withdraw unallocated); add, edit, revoke employees; **import a spreadsheet** (CSV, Excel `;` and decimal comma) with per-line errors; **monthly top-up** for everyone; search, filters, pagination, CSV export |
-| **Restaurant** | Payment QR (fixed or with a preset amount); today's sales updating live; gross, net and fees |
+| **Employee** | Sign in with email, Google or SMS ([Privy](https://privy.io) embedded wallet); pay by QR with 0 SOL (gasless); balance, today's limit, history with refunds; **monthly statement**; install Tabbit on the phone's home screen; their wallet address, Explorer link and private-key export |
+| **Company (HR)** | Register and wait for approval; vault (deposit / withdraw unallocated); add, edit, revoke employees; **import a spreadsheet** (CSV, Excel `;` and decimal comma) with per-line errors; **monthly top-up** for everyone; search, filters, pagination, CSV export; **monthly statement** per employee with CSV for PAT bookkeeping |
+| **Restaurant** | Payment QR (fixed or with a preset amount) and a **printable counter poster**; today's sales updating live; gross, net and fees; **refund** a sale back to the employee |
 | **Tabbit (platform)** | `/admin`: approve or suspend companies, register and toggle restaurants, emergency pause, fee-payer balance |
 | **Visitors / judges** | "Try it as an employee": sign in and get a devnet demo benefit from a demo company, then pay a demo restaurant |
 | **Anyone** | [`/transparency`](https://tabbit-sol.vercel.app/transparency): total paid, what restaurants saved vs the 3.6% market cap, **proof that vault balances cover every allocated benefit**, paid per day, latest payments appearing live |
@@ -85,7 +85,7 @@ Benefit money never sits in the employee's wallet. Their balance is a number in 
 | Layer | Stack | Folder |
 |---|---|---|
 | On-chain program | Rust + Anchor 0.31 | `programs/tabbit` |
-| Program tests | Anchor + Mocha (26 tests, incl. SDK end-to-end and fee payer) | `tests/` |
+| Program tests | Anchor + Mocha (29 tests, incl. SDK end-to-end, fee payer and refunds) | `tests/` |
 | Client SDK | TypeScript (`@tabbit/sdk`): typed client, PDAs, fee-payer validation, history scan | `sdk/` |
 | Web app | Next.js 16 + React 19 + Tailwind 4, Solana Wallet Adapter, Privy | `app/` |
 | Scripts | Devnet seed, key export, one-off migrations | `scripts/` |
@@ -106,6 +106,7 @@ Benefit money never sits in the employee's wallet. Their balance is a number in 
 | `revoke_employee()` | Company | Return an employee's unused balance (e.g. termination) |
 | `withdraw_unallocated(amount)` | Company | Withdraw funds not allocated to anyone |
 | `pay(amount)` | Employee | Pay a meal: checks every rule, settles to the restaurant and treasury, emits `PaymentMade` |
+| `refund(amount, reference)` | Restaurant | Send a payment back: restaurant → company vault, credits the employee's balance and today's spending, emits `RefundMade` with the refunded payment's signature |
 
 Accounts (all PDAs): `Config` `["config"]`, `Employer` `["employer", owner]`, `EmployerApproval` `["approval", employer]`, `Employee` `["employee", employer, wallet]`, `Merchant` `["merchant", wallet]`.
 
@@ -160,7 +161,9 @@ Team docs (Portuguese): [`docs/IMPLEMENTACAO.md`](docs/IMPLEMENTACAO.md) and [`d
 - [x] Spreadsheet import and monthly top-up
 - [x] Public transparency page with proof of reserves
 - [x] "Try it as an employee" demo benefit for visitors
-- [ ] Refunds from the restaurant
+- [x] Refunds from the restaurant
+- [x] Monthly statements for employees and companies
+- [x] Installable app (PWA), printable counter poster, CI
 - [ ] Employee names and email invites (off-chain directory)
 - [ ] Platform key in a Squads multisig
 - [ ] Pilot with real restaurants in São Paulo

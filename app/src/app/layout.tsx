@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://tabbit-sol.vercel.app"),
   title: "Tabbit",
   description: "On-chain meal benefits on Solana. Employers fund in USDC, workers pay by QR, restaurants get paid in seconds.",
+  // Instalado na tela inicial do iPhone, abre sem a barra do Safari
+  appleWebApp: { capable: true, title: "Tabbit", statusBarStyle: "default" },
   openGraph: {
     title: "Tabbit",
     description: "Meal benefits with rules enforced on-chain. Restaurants get paid in seconds, for a 0.8% fee.",

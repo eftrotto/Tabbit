@@ -3,6 +3,7 @@
 // A tela só abre para a carteira `Config.authority`, mas quem garante isso de verdade é o programa:
 // toda ação aqui falha on-chain se outra carteira assinar.
 import { useState } from "react";
+import Link from "next/link";
 import { PublicKey } from "@solana/web3.js";
 import type { Category, ConfigAccount, EmployerAccount, MerchantAccount, TabbitClient } from "@tabbit/sdk";
 import { Card, DemoBanner, ErrorText, Money, shortKey } from "@/components/ui";
@@ -222,6 +223,7 @@ function Restaurants({ client, merchants, isMock, reload }: { client: TabbitClie
             </div>
             <div className="flex items-center gap-3">
               {m.active ? <Chip tone="green">Active</Chip> : <Chip tone="red">Inactive</Chip>}
+              <Link className="underline" href={`/merchant/poster?merchant=${m.wallet.toBase58()}`}>Poster</Link>
               <button className="underline disabled:opacity-50" disabled={toggle.pending} onClick={() => void toggle.run(() => client.setMerchantActive(m.wallet, !m.active), reload)}>
                 {m.active ? "Deactivate" : "Activate"}
               </button>

@@ -5,6 +5,7 @@ import { LiveMark } from "@/components/landing/live-mark";
 import { formatWindow } from "@/lib/time";
 import { friendlyError } from "@/lib/errors";
 import { useEmployeeLogin } from "@/lib/employee-wallet";
+import { InstallApp } from "./install";
 import { explorerAddressUrl, explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
 import { availableToday, CategoryBadge, CopyButton, EmployeeSignIn, fmtTime, NotLinked } from "./shared";
 
@@ -113,6 +114,7 @@ export default function EmployeePage() {
       </Card>
 
       {!isMock && <WalletCard address={actor.toBase58()} />}
+      <InstallApp />
     </div>
   );
 }

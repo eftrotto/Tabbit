@@ -67,7 +67,7 @@ export function Header() {
     if (el && bar) bar.scrollLeft = el.offsetLeft - (bar.clientWidth - el.offsetWidth) / 2;
   }, [path, nav.length]);
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3">
+    <header className="sticky top-0 z-40 px-3 pt-3 print:hidden">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-ink/[0.07] bg-paper/75 px-3 py-2 shadow-[0_8px_30px_-12px_rgba(11,43,43,0.15)] backdrop-blur-xl sm:px-4">
         <Link href="/" className="flex items-center gap-2 text-xl">
           <Logo className="h-8 w-auto" />

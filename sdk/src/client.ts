@@ -413,7 +413,11 @@ export function createTabbitClient(opts: CreateTabbitClientOptions): TabbitClien
       const rows = await cached(cacheKey(`employee:${wallet.toBase58()}`), 5_000, () =>
         program.account.employee.all([{ memcmp: { offset: EMPLOYEE_WALLET_OFFSET, bytes: wallet.toBase58() } }])
       );
-      if (rows.length === 0) return null;
+      // "Ainda não é funcionário" pode mudar a qualquer momento (cadastro): não fica no cache
+      if (rows.length === 0) {
+        invalidate(`employee:${wallet.toBase58()}`);
+        return null;
+      }
       // MVP: 1 empresa por funcionário; se houver mais de uma, prefere a ativa
       const row = rows.find((r) => r.account.active) ?? rows[0];
       employeeAddressByWallet.set(wallet.toBase58(), row.publicKey);

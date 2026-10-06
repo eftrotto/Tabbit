@@ -8,10 +8,12 @@ import { useEmployeeLogin } from "@/lib/employee-wallet";
 import { InstallApp } from "./install";
 import { explorerAddressUrl, explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
 import { availableToday, CategoryBadge, CopyButton, EmployeeSignIn, fmtTime, NotLinked } from "./shared";
+import { DemoOffer, DemoRefill, useDemo } from "./demo";
 
 export default function EmployeePage() {
   const { client, actor, isMock, isDemoPersona } = useTabbit("employee");
-  const { data, error, loading } = useLoad(async () => {
+  const demo = useDemo(!isMock && !!actor);
+  const { data, error, loading, reload } = useLoad(async () => {
     if (!actor) return null;
     const [employee, merchants] = await Promise.all([client.getEmployeeByWallet(actor), client.listMerchants()]);
     const [payments, refunds] = employee
@@ -26,7 +28,7 @@ export default function EmployeePage() {
   }, [client, actor]);
 
   const banner = <DemoBanner isMock={isMock} isDemoPersona={isDemoPersona} persona="João (employee)" />;
-  if (!actor) return <div className="mx-auto max-w-md">{banner}<EmployeeSignIn what="Sign in with the email your employer registered to see your meal benefit." walletWhat="Connect the wallet your employer registered to see your meal benefit." /></div>;
+  if (!actor) return <div className="mx-auto max-w-md">{banner}<EmployeeSignIn what="Sign in with email or Google to see your meal benefit. New here? You get a demo benefit to try it." walletWhat="Connect the wallet your employer registered to see your meal benefit." /></div>;
   if (error) return <div className="mx-auto max-w-md">{banner}<ErrorText>{friendlyError(error)}</ErrorText></div>;
   if (loading || !data) return <div className="mx-auto max-w-md">{banner}<p className="opacity-60">Loading your benefit…</p></div>;
 
@@ -35,11 +37,14 @@ export default function EmployeePage() {
     return (
       <div className="mx-auto max-w-md">
         {banner}
-        <NotLinked
-          title="No meal benefit linked to this wallet"
-          hint="Send this wallet address to your employer so they can add you."
-          address={actor.toBase58()}
-        />
+        <div className="space-y-5">
+          {demo?.enabled && <DemoOffer demo={demo} wallet={actor} onEnrolled={reload} />}
+          <NotLinked
+            title={demo?.enabled ? "Or use your real employer" : "No meal benefit linked to this wallet"}
+            hint="Send this wallet address to your employer so they can add you."
+            address={actor.toBase58()}
+          />
+        </div>
       </div>
     );
 
@@ -80,6 +85,8 @@ export default function EmployeePage() {
           </>
         )}
       </section>
+
+      {demo?.employer === e.employer.toBase58() && e.active && e.balance < e.maxPerMeal && <DemoRefill wallet={actor} onRefilled={reload} />}
 
       <Link href="/pay?scan=1" className="btn-primary w-full !py-4 text-lg">
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>

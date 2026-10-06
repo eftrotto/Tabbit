@@ -97,15 +97,15 @@ export function Hero() {
             className="mt-9 flex flex-wrap gap-3"
           >
             <Link
-              href="/employer"
+              href="/employee"
               className="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-brand px-6 py-3.5 font-bold text-ink shadow-[0_0_40px_-8px] shadow-brand transition hover:scale-[1.03]"
             >
               <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent transition duration-700 group-hover:translate-x-full" />
-              Try the live demo <span className="transition group-hover:translate-x-1">→</span>
+              Try it as an employee <span className="transition group-hover:translate-x-1">→</span>
             </Link>
-            <a href="#how" className="glass inline-flex items-center rounded-2xl px-6 py-3.5 font-semibold text-white transition hover:bg-white/10">
-              See how it works
-            </a>
+            <Link href="/transparency" className="glass inline-flex items-center rounded-2xl px-6 py-3.5 font-semibold text-white transition hover:bg-white/10">
+              See the live network
+            </Link>
           </motion.div>
 
           <motion.dl

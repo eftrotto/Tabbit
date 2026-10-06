@@ -3,6 +3,7 @@
 // Modo real: /api/network (o servidor lê a cadeia uma vez para todos) + pagamentos novos ao vivo.
 // Modo demo: os mesmos números calculados a partir do mock.
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { PROGRAM_ID, type Payment } from "@tabbit/sdk";
 import { ThinkingOrb } from "thinking-orbs";
 import { Card, ErrorText, Money } from "@/components/ui";
@@ -30,7 +31,12 @@ export default function TransparencyPage() {
             Every number on this page is read from the Solana blockchain. Nothing here depends on trusting us: follow any link to check it yourself.
           </p>
         </div>
-        <LivePill />
+        <div className="flex flex-wrap items-center gap-2">
+          <LivePill />
+          {!tabbit.isMock && (
+            <Link href="/employee" className="btn-primary !rounded-full !px-4 !py-1.5 text-sm">Try it as an employee →</Link>
+          )}
+        </div>
       </header>
 
       {error && !stats ? <ErrorText>{friendlyError(error)}</ErrorText>

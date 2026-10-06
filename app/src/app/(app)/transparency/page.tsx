@@ -4,6 +4,7 @@
 // Modo demo: os mesmos números calculados a partir do mock.
 import { useEffect, useState } from "react";
 import { PROGRAM_ID, type Payment } from "@tabbit/sdk";
+import { ThinkingOrb } from "thinking-orbs";
 import { Card, ErrorText, Money } from "@/components/ui";
 import { useCurrency } from "@/components/providers";
 import { friendlyError } from "@/lib/errors";
@@ -33,7 +34,7 @@ export default function TransparencyPage() {
       </header>
 
       {error && !stats ? <ErrorText>{friendlyError(error)}</ErrorText>
-        : !stats ? <p className="opacity-60">Reading the blockchain… the first load can take a few seconds.</p>
+        : !stats ? <Loading />
         : <Dashboard stats={stats} fresh={fresh} isMock={tabbit.isMock} />}
     </div>
   );
@@ -86,6 +87,31 @@ function useNetworkStats({ client, isMock }: TabbitContext) {
   }, [client, isMock]);
 
   return { stats, error, fresh };
+}
+
+// A primeira leitura na RPC pública pode levar ~20 s: a mensagem avança para não parecer travado
+const LOADING_STEPS: [number, string][] = [
+  [0, "Reading the Solana blockchain…"],
+  [4, "Collecting payments from every restaurant…"],
+  [10, "Checking company vault balances…"],
+  [16, "The public devnet is slow. Almost there…"],
+];
+
+function Loading() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const message = LOADING_STEPS.filter(([at]) => elapsed >= at).at(-1)![1];
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+      {/* Desenho de 64 px ampliado: o componente só tem presets de 20, 32 e 64 */}
+      <ThinkingOrb state="solving" size={64} theme="light" color="#07574f" style={{ width: 128, height: 128 }} aria-label="Loading network data" />
+      <p className="text-lg font-semibold">{message}</p>
+      <p className="max-w-sm text-sm opacity-60">Every number is read live from the chain, nothing is pre-computed.</p>
+    </div>
+  );
 }
 
 function LivePill() {

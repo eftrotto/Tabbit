@@ -148,3 +148,18 @@ test("wallet without SOL gets a clear message", async () => {
   assert.match(friendlyError(new Error('Transaction simulation failed: "AccountNotFound"')), /no SOL/);
   assert.match(friendlyError(new Error("Attempt to debit an account but found no record of a prior credit.")), /faucet/);
 });
+
+test("restaurant refunds a payment: balance and daily spend come back", async () => {
+  resetMockStore();
+  const joao = createMockClient(DEMO.employee, { now: () => NOON_BRT });
+  const sig = await joao.pay({ merchant: DEMO.merchant, amount: 30n * U });
+  const cantina = createMockClient(DEMO.merchant, { now: () => NOON_BRT });
+  await assert.rejects(createMockClient(DEMO.employee2).refund({ employee: DEMO.employee, amount: U, reference: sig }), code("Unauthorized"));
+  await cantina.refund({ employee: DEMO.employee, amount: 10n * U, reference: sig });
+  const me = (await joao.getEmployeeByWallet(DEMO.employee))!;
+  assert.equal(me.balance, 180n * U); // 200 - 30 + 10
+  assert.equal(me.spentToday, 20n * U);
+  const [r] = await cantina.listRefunds({ merchant: DEMO.merchant });
+  assert.equal(r.reference, sig);
+  assert.equal(r.amount, 10n * U);
+});

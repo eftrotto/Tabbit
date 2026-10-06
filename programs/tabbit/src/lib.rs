@@ -79,4 +79,8 @@ pub mod tabbit {
     pub fn pay(ctx: Context<Pay>, amount: u64) -> Result<()> {
         instructions::pay::pay(ctx, amount)
     }
+
+    pub fn refund(ctx: Context<Refund>, amount: u64, reference: [u8; 64]) -> Result<()> {
+        instructions::refund::refund(ctx, amount, reference)
+    }
 }

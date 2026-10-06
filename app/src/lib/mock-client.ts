@@ -10,6 +10,7 @@ import type {
   EmployerAccount,
   MerchantAccount,
   Payment,
+  Refund,
   TabbitClient,
   UpsertEmployeeInput,
 } from "@tabbit/sdk";
@@ -36,12 +37,14 @@ interface EmployerRow { owner: string; name: string; mint: string; tzOffsetMinut
 interface EmployeeRow { employerOwner: string; wallet: string; balance: bigint; maxPerMeal: bigint; dailyCap: bigint; spentToday: bigint; lastSpendDay: number; windowStartMin: number; windowEndMin: number; active: boolean }
 interface MerchantRow { wallet: string; name: string; category: Category; active: boolean }
 interface PaymentRow { signature: string; employer: string; employee: string; merchant: string; amount: bigint; fee: bigint; timestamp: number }
+interface RefundRow { signature: string; employer: string; employee: string; merchant: string; amount: bigint; reference: string; timestamp: number }
 interface Store {
   config: { authority: string; treasury: string; feeBps: number; paused: boolean; mint: string };
   employers: EmployerRow[];
   employees: EmployeeRow[];
   merchants: MerchantRow[];
   payments: PaymentRow[];
+  refunds: RefundRow[];
 }
 
 function seed(): Store {
@@ -64,6 +67,7 @@ function seed(): Store {
       { wallet: DEMO.merchant3.toBase58(), name: "Mercado Bom Preço", category: "grocery", active: true },
     ],
     payments: [],
+    refunds: [],
   };
 }
 
@@ -82,6 +86,7 @@ function load(): Store {
   try {
     const raw = hasWindow ? localStorage.getItem(STORAGE_KEY) : null;
     store = raw ? (JSON.parse(raw, reviver) as Store) : seed();
+    store.refunds ??= []; // dados salvos antes dos estornos
   } catch {
     store = seed();
   }
@@ -239,6 +244,13 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
         .slice(0, limit ?? Infinity)
         .map(toPayment);
     },
+    async listRefunds({ merchant, employee, limit }) {
+      return load()
+        .refunds.filter((r) => (!merchant || r.merchant === merchant.toBase58()) && (!employee || r.employee === employee.toBase58()))
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, limit ?? Infinity)
+        .map((r): Refund => ({ ...r, employer: pk(r.employer), employee: pk(r.employee), merchant: pk(r.merchant) }));
+    },
     onPayment(cb) {
       listeners.add(cb);
       return () => void listeners.delete(cb);
@@ -378,6 +390,29 @@ export function createMockClient(signer: PublicKey | null, opts: MockClientOptio
         listeners.forEach((cb) => cb(toPayment(payment)));
         channel?.postMessage({ type: "payment", payment: JSON.stringify(payment, replacer) });
         return Promise.resolve(payment.signature);
+      }),
+    refund: ({ employee, amount, reference }) =>
+      tx(() => {
+        // Mesmas regras do programa: só o restaurante (quem assina), funcionário ativo, valor > 0
+        const s = load();
+        const me = requireSigner();
+        const m = s.merchants.find((x) => x.wallet === me);
+        if (!m) throw new TabbitError("Unauthorized", "Only a registered restaurant can refund");
+        const row = s.employees.find((e) => e.wallet === employee.toBase58());
+        if (!row || !row.active) throw new TabbitError("EmployeeInactive");
+        if (amount <= 0n) throw new TabbitError("InvalidAmount");
+        const emp = s.employers.find((e) => e.owner === row.employerOwner)!;
+        const t = now();
+        row.balance += amount;
+        if (row.lastSpendDay === localDay(t, emp.tzOffsetMinutes)) row.spentToday = row.spentToday > amount ? row.spentToday - amount : 0n;
+        emp.totalDeposited += amount;
+        emp.totalAllocated += amount;
+        const signature = fakeSignature();
+        s.refunds.push({
+          signature, employer: findEmployerPda(pk(emp.owner)).toBase58(), employee: row.wallet, merchant: me,
+          amount, reference, timestamp: t,
+        });
+        return done(s).then(() => signature);
       }),
   };
 }

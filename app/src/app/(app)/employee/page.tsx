@@ -13,8 +13,15 @@ export default function EmployeePage() {
   const { data, error, loading } = useLoad(async () => {
     if (!actor) return null;
     const [employee, merchants] = await Promise.all([client.getEmployeeByWallet(actor), client.listMerchants()]);
-    const payments = employee ? await client.listPayments({ employee: actor, limit: 10 }) : [];
-    return { employee, merchants, payments };
+    const [payments, refunds] = employee
+      ? await Promise.all([client.listPayments({ employee: actor, limit: 10 }), client.listRefunds({ employee: actor, limit: 10 })])
+      : [[], []];
+    // Pagamentos e estornos numa linha do tempo só, mais novos primeiro
+    const history = [
+      ...payments.map((p) => ({ kind: "payment" as const, signature: p.signature, merchant: p.merchant, amount: p.amount, timestamp: p.timestamp })),
+      ...refunds.map((r) => ({ kind: "refund" as const, signature: r.signature, merchant: r.merchant, amount: r.amount, timestamp: r.timestamp })),
+    ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
+    return { employee, merchants, payments: history };
   }, [client, actor]);
 
   const banner = <DemoBanner isMock={isMock} isDemoPersona={isDemoPersona} persona="João (employee)" />;
@@ -100,13 +107,16 @@ export default function EmployeePage() {
           {payments.map((p) => (
             <li key={p.signature} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
-                <p className="truncate font-medium">{names.get(p.merchant.toBase58()) ?? "Restaurant"}</p>
+                <p className="truncate font-medium">
+                  {p.kind === "refund" && <span className="mr-1.5 rounded-full bg-brand/25 px-2 py-0.5 text-xs font-semibold">Refund</span>}
+                  {names.get(p.merchant.toBase58()) ?? "Restaurant"}
+                </p>
                 <p className="text-xs opacity-60">
                   {fmtTime(p.timestamp)} ·{" "}
                   <a className="underline" href={explorerTxUrl(p.signature)} target="_blank" rel="noreferrer">Explorer</a>
                 </p>
               </div>
-              <Money base={p.amount} className="shrink-0 font-semibold" />
+              <span className="shrink-0 font-semibold">{p.kind === "refund" && "+ "}<Money base={p.amount} /></span>
             </li>
           ))}
         </ul>

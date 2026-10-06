@@ -56,6 +56,16 @@ export interface Payment {
   timestamp: number; // unix seconds
 }
 
+export interface Refund {
+  signature: TransactionSignature; // do estorno
+  employer: PublicKey;
+  employee: PublicKey; // wallet do funcionário
+  merchant: PublicKey; // wallet do restaurante
+  amount: bigint;
+  reference: TransactionSignature; // pagamento estornado
+  timestamp: number; // unix seconds
+}
+
 export interface UpsertEmployeeInput {
   wallet: PublicKey;
   balance: bigint;
@@ -104,6 +114,8 @@ export interface TabbitClient {
     employer?: PublicKey;
     limit?: number;
   }): Promise<Payment[]>;
+  /** Estornos (eventos RefundMade), mais novos primeiro. Mesmos filtros de listPayments. */
+  listRefunds(filter: { merchant?: PublicKey; employee?: PublicKey; limit?: number }): Promise<Refund[]>;
   onPayment(cb: (p: Payment) => void): () => void; // retorna função para cancelar
 
   // escrita (a carteira conectada assina)
@@ -120,4 +132,6 @@ export interface TabbitClient {
   setEmployerApproved(owner: PublicKey, approved: boolean): Promise<TransactionSignature>;
   setPaused(paused: boolean): Promise<TransactionSignature>;
   pay(input: { merchant: PublicKey; amount: bigint }): Promise<TransactionSignature>;
+  /** O restaurante (carteira conectada) devolve um pagamento ao funcionário. */
+  refund(input: { employee: PublicKey; amount: bigint; reference: TransactionSignature }): Promise<TransactionSignature>;
 }

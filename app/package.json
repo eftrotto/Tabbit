@@ -10,9 +10,12 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/lib/*.test.ts"
+    "test": "node --test --experimental-strip-types src/lib/*.test.ts",
+    "db:migrate": "node --env-file=.env.local db/migrate.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "@noble/curves": "^1.9.7",
     "@privy-io/react-auth": "^3.46.0",
     "@solana-program/memo": "^0.15.0",
     "@solana-program/system": "^0.15.0",

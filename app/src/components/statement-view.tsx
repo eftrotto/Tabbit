@@ -13,7 +13,7 @@ const MONTHS = recentMonths(6);
 const monthLabel = (m: string) =>
   new Date(`${m}-15T12:00:00Z`).toLocaleDateString(undefined, { month: "long", year: "numeric", timeZone: "UTC" });
 
-export function StatementView({ client, filter, title, back, byEmployee, fileName, isMock }: {
+export function StatementView({ client, filter, title, back, byEmployee, fileName, isMock, names }: {
   client: TabbitClient;
   /** Quem: { employee } ou { employer } (PDA). O período vem do mês escolhido. */
   filter: Pick<HistoryFilter, "employee" | "employer">;
@@ -22,6 +22,8 @@ export function StatementView({ client, filter, title, back, byEmployee, fileNam
   byEmployee: boolean;
   fileName: string;
   isMock: boolean;
+  /** Nomes do diretório (só a empresa, com o diretório aberto). */
+  names?: Map<string, string | null>;
 }) {
   const [month, setMonth] = useState(MONTHS[0]);
   const key = filter.employee?.toBase58() ?? filter.employer?.toBase58();
@@ -37,7 +39,7 @@ export function StatementView({ client, filter, title, back, byEmployee, fileNam
 
   function downloadCsv() {
     if (!data) return;
-    const url = URL.createObjectURL(new Blob([statementCsv(data.statement.rows, data.names)], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob([statementCsv(data.statement.rows, data.names, names)], { type: "text/csv;charset=utf-8" }));
     Object.assign(document.createElement("a"), { href: url, download: `${fileName}-${month}.csv` }).click();
     URL.revokeObjectURL(url);
   }
@@ -83,12 +85,12 @@ export function StatementView({ client, filter, title, back, byEmployee, fileNam
                 <div className="-mx-2 overflow-x-auto px-2">
                   <table className="w-full min-w-[32rem] text-left text-sm">
                     <thead className="border-b border-ink/10 text-xs opacity-70">
-                      <tr>{["Employee wallet", "Payments", "Paid", "Refunded", "Net"].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}</tr>
+                      <tr>{["Employee", "Payments", "Paid", "Refunded", "Net"].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}</tr>
                     </thead>
                     <tbody>
                       {data.statement.byEmployee.map((e) => (
                         <tr key={e.employee} className="border-b border-ink/5 last:border-0">
-                          <td className="px-2 py-2 font-mono">{shortKey(e.employee)}</td>
+                          <td className="px-2 py-2">{names?.get(e.employee) ?? <span className="font-mono">{shortKey(e.employee)}</span>}</td>
                           <td className="px-2 py-2">{e.payments}</td>
                           <td className="px-2 py-2"><Money base={e.spent} /></td>
                           <td className="px-2 py-2"><Money base={e.refunded} /></td>
@@ -112,7 +114,7 @@ export function StatementView({ client, filter, title, back, byEmployee, fileNam
                         <p className="font-medium">
                           {r.kind === "refund" && <span className="mr-1.5 rounded-full bg-brand/25 px-2 py-0.5 text-xs font-semibold">Refund</span>}
                           {data.names[r.merchant] ?? "Restaurant"}
-                          {byEmployee && <span className="ml-2 font-mono text-xs opacity-60">{shortKey(r.employee)}</span>}
+                          {byEmployee && <span className="ml-2 text-xs opacity-60">{names?.get(r.employee) ?? <span className="font-mono">{shortKey(r.employee)}</span>}</span>}
                         </p>
                         <p className="text-xs opacity-60">
                           {new Date(r.timestamp * 1000).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}

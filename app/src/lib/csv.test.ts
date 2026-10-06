@@ -56,3 +56,32 @@ test("export round-trips through import", () => {
   assert.equal(back.rows[0].balance, 200n * U);
   assert.equal(back.rows[0].windowEndMin, 900);
 });
+
+test("optional people columns go to the directory, with quoted names", () => {
+  const { rows, people, errors } = parseEmployeesCsv(
+    `wallet,name,email,employee_id,balance,max_per_meal,daily_cap\n${a},"Souza, Maria",Maria@Acme.com,ACM-1,200,40,60\n${b},,,,100,20,30\n`
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(people[0], { wallet: a, name: "Souza, Maria", email: "Maria@Acme.com", employeeId: "ACM-1" });
+  // célula vazia = manter o que já existe
+  assert.deepEqual(people[1], { wallet: b, name: undefined, email: undefined, employeeId: undefined });
+});
+
+test("invalid email fails the line; no people columns means no directory updates", () => {
+  const bad = parseEmployeesCsv(`wallet,email,balance,max_per_meal,daily_cap\n${a},not-an-email,1,1,1\n`);
+  assert.equal(bad.rows.length, 0);
+  assert.match(bad.errors[0].message, /Invalid email/);
+  assert.deepEqual(parseEmployeesCsv(`wallet,balance,max_per_meal,daily_cap\n${a},1,1,1\n`).people, []);
+});
+
+test("export with names round-trips names, emails and quotes", () => {
+  const { rows } = parseEmployeesCsv(`wallet,balance,max_per_meal,daily_cap\n${a},200,40,60\n`);
+  const names = new Map([[a, { wallet: a, name: "Souza, Maria", email: "maria@acme.com", employeeId: "ACM-1" }]]);
+  const csv = employeesToCsv([{ ...rows[0], windowStartMin: 0, windowEndMin: 0, address: rows[0].wallet, employer: rows[0].wallet, spentToday: 0n, active: true }], names);
+  assert.match(csv.split("\n")[0], /^wallet,name,email,employee_id,balance/);
+  const back = parseEmployeesCsv(csv);
+  assert.deepEqual(back.errors, []);
+  assert.equal(back.people[0].name, "Souza, Maria");
+  assert.equal(back.rows[0].balance, 200n * U);
+});

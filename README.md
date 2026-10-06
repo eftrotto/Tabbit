@@ -70,7 +70,7 @@ Benefit money never sits in the employee's wallet. Their balance is a number in 
 | Employee balances and rules | `/api/sponsor`: co-signs payments as fee payer after strict validation |
 | Restaurant registry, company approvals | `/api/network`: reads the chain once for all visitors of the transparency page |
 | Every payment and its rule checks | Privy login (email / Google / SMS → embedded Solana wallet) |
-| `PaymentMade` events (the audit trail) | Nothing about people: no names, emails or IDs go on-chain (LGPD) |
+| `PaymentMade` events (the audit trail) | `/api/directory`: employee names, emails and IDs in Postgres, opened only with a signature from the company wallet. Nothing about people goes on-chain (LGPD) |
 
 ## Security model
 
@@ -125,6 +125,7 @@ Demo mode keeps everything in the browser and mirrors the program's rules, so ev
 | `NEXT_PUBLIC_RPC_URL` | Optional | Defaults to the public devnet RPC, which is slow and rate-limited; a Helius devnet URL is much better |
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Employee login with email / Google | Public value. Without it, employees use Phantom |
 | `DEMO_EMPLOYER_SECRET_KEY` | "Try it as an employee" | **Secret.** JSON array of the demo company owner's keypair (devnet only). Without it, the demo offer is hidden |
+| `DATABASE_URL` | Employee names (directory) | **Secret.** Postgres URL (we use Neon). Run `npm run db:migrate -w app` once. Without it, names are hidden and everything else works |
 | `SPONSOR_SECRET_KEY` | Gasless payments | **Secret.** JSON array of the fee-payer keypair (fund it with devnet SOL). Without it, employees pay their own fee |
 | `NEXT_PUBLIC_WAITLIST_URL` | Optional | Waitlist form embedded on the landing |
 | `NEXT_PUBLIC_RATE_BRL` / `NEXT_PUBLIC_RATE_EUR` | Optional | Display rate for local currency (default 5.4 / 0.92) |
@@ -161,7 +162,8 @@ Team docs (Portuguese): [`docs/IMPLEMENTACAO.md`](docs/IMPLEMENTACAO.md) and [`d
 - [x] Public transparency page with proof of reserves
 - [x] "Try it as an employee" demo benefit for visitors
 - [ ] Refunds from the restaurant
-- [ ] Employee names and email invites (off-chain directory)
+- [x] Employee names, emails and IDs (off-chain directory, company-wallet signature)
+- [ ] Email invites (wallet created before the employee's first login)
 - [ ] Platform key in a Squads multisig
 - [ ] Pilot with real restaurants in São Paulo
 - [ ] Local-currency stablecoins (BRL) and off-ramp for restaurants

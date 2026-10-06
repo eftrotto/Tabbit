@@ -7,6 +7,7 @@ import { friendlyError } from "@/lib/errors";
 import { useLoad, useTabbit } from "@/lib/tabbit";
 import { EmployeeForm } from "./employee-form";
 import { EmployeesCard } from "./employees";
+import { useDirectory } from "@/lib/directory";
 import { CopyButton } from "../employee/shared";
 import { TxStatus, useTx } from "./tx";
 import { Vault } from "./vault";
@@ -71,6 +72,7 @@ function Dashboard({ client, employer, isMock, reloadEmployer }: {
   client: TabbitClient; employer: EmployerAccount; isMock: boolean; reloadEmployer: () => Promise<unknown>;
 }) {
   const employees = useLoad(() => client.listEmployees(employer.owner), [client, employer.owner]);
+  const directory = useDirectory(employer.owner, isMock);
   const payments = useLoad(() => client.listPayments({ employer: employer.address, limit: 10 }), [client, employer.address]);
   const [editing, setEditing] = useState<EmployeeAccount | "new" | null>(null);
   const { reload: reloadEmployees } = employees;
@@ -90,11 +92,11 @@ function Dashboard({ client, employer, isMock, reloadEmployer }: {
       <Vault client={client} employer={employer} isMock={isMock} onChanged={refresh} />
 
       {editing && (
-        <EmployeeForm key={editing === "new" ? "new" : editing.wallet.toBase58()} client={client} isMock={isMock} unallocated={free}
+        <EmployeeForm key={`${editing === "new" ? "new" : editing.wallet.toBase58()}-${directory.status}`} directory={directory} client={client} isMock={isMock} unallocated={free}
           editing={editing === "new" ? null : editing} onSaved={refresh} onCancel={() => setEditing(null)} />
       )}
 
-      <EmployeesCard client={client} employer={employer} employees={employees.data} error={employees.error} isMock={isMock}
+      <EmployeesCard client={client} employer={employer} employees={employees.data} error={employees.error} isMock={isMock} directory={directory}
         onChanged={refresh} onAdd={() => setEditing("new")} onEdit={(e) => setEditing(e)} />
 
       <Card title={<span className="flex items-baseline justify-between gap-3">Recent payments<Link href="/employer/statement" className="text-sm font-semibold underline">Monthly statement</Link></span>}>

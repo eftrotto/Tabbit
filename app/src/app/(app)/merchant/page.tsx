@@ -11,6 +11,7 @@ import { explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
 import { ConnectCard, CopyButton, NotLinked } from "../employee/shared";
 import { TxStatus, useTx } from "../employer/tx";
 import { useCurrency } from "@/components/providers";
+import { Loading } from "@/components/loading";
 
 export default function MerchantPage() {
   const { client, actor, isMock, isDemoPersona } = useTabbit("merchant");
@@ -19,7 +20,7 @@ export default function MerchantPage() {
 
   if (!actor) return <div className="mx-auto max-w-2xl">{banner}<ConnectCard what="Connect your restaurant wallet to get your QR code and see sales." /></div>;
   if (error) return <div className="mx-auto max-w-2xl">{banner}<ErrorText>{friendlyError(error)}</ErrorText></div>;
-  if (loading) return <div className="mx-auto max-w-2xl">{banner}<p className="opacity-60">Loading…</p></div>;
+  if (loading) return <div className="mx-auto max-w-2xl">{banner}<Loading message="Loading your restaurant…" /></div>;
   if (!merchant)
     return (
       <div className="mx-auto max-w-2xl">

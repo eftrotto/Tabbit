@@ -33,7 +33,8 @@ function AccountButton({ employeeView }: { employeeView: boolean }) {
   const login = useEmployeeLogin();
   const { connected } = useWallet();
   if (!employeeView || login.status === "disabled" || connected) return <WalletMultiButton />;
-  if (login.status === "ready")
+  // Logado (mesmo com a carteira ainda sendo criada): mostra quem é e o Sign out
+  if (login.status === "ready" || login.status === "creating-wallet" || login.status === "wallet-error")
     return (
       <div className="flex items-center gap-2">
         {login.label && <span className="hidden max-w-[12rem] truncate text-sm font-semibold sm:inline">{login.label}</span>}

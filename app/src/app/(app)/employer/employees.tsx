@@ -11,6 +11,7 @@ import { formatWindow } from "@/lib/time";
 import { explorerAddressUrl } from "@/lib/tabbit";
 import type { Directory } from "@/lib/directory";
 import { TxStatus, useTx } from "./tx";
+import { Loading } from "@/components/loading";
 
 const PAGE = 20;
 type Filter = "all" | "active" | "revoked" | "low";
@@ -113,7 +114,7 @@ export function EmployeesCard({ client, employer, employees, error, isMock, onCh
       <ErrorText>{directory.error}</ErrorText>
 
       {error ? <ErrorText>{friendlyError(error)}</ErrorText>
-        : !employees ? <p className="text-sm opacity-60">Loading…</p>
+        : !employees ? <Loading variant="inline" message="Loading employees…" />
         : employees.length === 0 ? <p className="text-sm opacity-70">No employees yet. Add one, or import a spreadsheet to add your whole team at once.</p>
         : filtered.length === 0 ? <p className="text-sm opacity-70">No employees match this search.</p>
         : (

@@ -101,7 +101,7 @@ export default function EmployeePage() {
         </ul>
       </Card>
 
-      <Card title="Recent payments">
+      <Card title={<span className="flex items-baseline justify-between gap-3">Recent payments<Link href="/employee/statement" className="text-sm font-semibold underline">Monthly statement</Link></span>}>
         {payments.length === 0 && <p className="text-sm opacity-60">No payments yet. Scan a restaurant QR to make your first one.</p>}
         <ul className="divide-y divide-ink/10">
           {payments.map((p) => (

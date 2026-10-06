@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { EmployeeAccount, EmployerAccount, TabbitClient } from "@tabbit/sdk";
 import { Card, DemoBanner, ErrorText, Money, shortKey } from "@/components/ui";
 import { friendlyError } from "@/lib/errors";
@@ -96,7 +97,7 @@ function Dashboard({ client, employer, isMock, reloadEmployer }: {
       <EmployeesCard client={client} employer={employer} employees={employees.data} error={employees.error} isMock={isMock}
         onChanged={refresh} onAdd={() => setEditing("new")} onEdit={(e) => setEditing(e)} />
 
-      <Card title="Recent payments">
+      <Card title={<span className="flex items-baseline justify-between gap-3">Recent payments<Link href="/employer/statement" className="text-sm font-semibold underline">Monthly statement</Link></span>}>
         {payments.error ? <ErrorText>{friendlyError(payments.error)}</ErrorText>
           : !payments.data ? <p className="text-sm opacity-60">Loading…</p>
           : payments.data.length === 0 ? <p className="text-sm opacity-70">No payments yet. They show up here the moment a worker pays a restaurant.</p>

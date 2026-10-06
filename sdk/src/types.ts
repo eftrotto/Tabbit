@@ -66,6 +66,16 @@ export interface Refund {
   timestamp: number; // unix seconds
 }
 
+/** Filtro do histórico. Com `since` (unix, inclusive) e `until` (exclusivo) traz o período inteiro e ignora `limit`. */
+export interface HistoryFilter {
+  merchant?: PublicKey;
+  employee?: PublicKey;
+  employer?: PublicKey; // PDA da empresa
+  limit?: number;
+  since?: number;
+  until?: number;
+}
+
 export interface UpsertEmployeeInput {
   wallet: PublicKey;
   balance: bigint;
@@ -108,14 +118,9 @@ export interface TabbitClient {
   getEmployeeByWallet(wallet: PublicKey): Promise<EmployeeAccount | null>; // MVP: 1 empresa por funcionário
   listMerchants(): Promise<MerchantAccount[]>;
   getMerchant(wallet: PublicKey): Promise<MerchantAccount | null>;
-  listPayments(filter: {
-    merchant?: PublicKey;
-    employee?: PublicKey;
-    employer?: PublicKey;
-    limit?: number;
-  }): Promise<Payment[]>;
+  listPayments(filter: HistoryFilter): Promise<Payment[]>;
   /** Estornos (eventos RefundMade), mais novos primeiro. Mesmos filtros de listPayments. */
-  listRefunds(filter: { merchant?: PublicKey; employee?: PublicKey; limit?: number }): Promise<Refund[]>;
+  listRefunds(filter: HistoryFilter): Promise<Refund[]>;
   onPayment(cb: (p: Payment) => void): () => void; // retorna função para cancelar
 
   // escrita (a carteira conectada assina)

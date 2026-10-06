@@ -1,0 +1,39 @@
+# Roda a cada PR e push na main. O `anchor test` (validador local + toolchain da Solana) fica de fora
+# por ser pesado: os testes do programa contra o validador continuam rodando localmente (README).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: SDK + app (typecheck, lint, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @tabbit/sdk
+      - run: npm run typecheck -w @tabbit/sdk
+      - run: npm run lint -w app
+      - run: npm run typecheck -w app
+      - run: npm test -w app
+      - run: npm run build -w app
+
+  program:
+    name: Program (Rust build + unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p tabbit --locked

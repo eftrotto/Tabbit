@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import type { PublicKey } from "@solana/web3.js";
 import type { Payment, TabbitClient } from "@tabbit/sdk";
@@ -68,6 +69,7 @@ function QrCard({ wallet, name }: { wallet: string; name: string }) {
         <code className="min-w-0 flex-1 break-all rounded-lg bg-ink/5 px-3 py-2 text-xs">{url}</code>
         <CopyButton text={url} />
       </div>
+      <Link href={`/merchant/poster?merchant=${wallet}`} className="btn-secondary mt-4 w-full">Print a counter poster</Link>
     </Card>
   );
 }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Category, EmployeeAccount } from "@tabbit/sdk";
 import { Card } from "@/components/ui";
 import { useEmployeeLogin } from "@/lib/employee-wallet";
+import { Loading } from "@/components/loading";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -22,10 +23,23 @@ export function ConnectCard({ what }: { what: string }) {
 
 /** Entrada do funcionário: e-mail/Google (carteira embutida) quando o Privy está ligado; senão, Phantom. */
 export function EmployeeSignIn({ what, walletWhat }: { what: string; walletWhat: string }) {
-  const { status, login } = useEmployeeLogin();
+  const { status, login, logout, walletError, retryWallet } = useEmployeeLogin();
   if (status === "disabled") return <ConnectCard what={walletWhat} />;
-  if (status === "loading") return <p className="opacity-60">Loading…</p>;
-  if (status === "creating-wallet") return <p className="opacity-60">Setting up your Tabbit account…</p>;
+  if (status === "loading") return <Loading />;
+  if (status === "creating-wallet" || status === "wallet-error")
+    return (
+      <Card title={status === "wallet-error" ? "Your wallet is not ready" : "Setting up your Tabbit account…"}>
+        {status === "wallet-error" ? (
+          <p role="alert" className="text-sm text-red-700">{walletError}</p>
+        ) : (
+          <Loading variant="inline" message="Creating your Solana wallet. This usually takes a few seconds." />
+        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {status === "wallet-error" && <button className="btn-primary" onClick={retryWallet}>Try again</button>}
+          <button className="btn-secondary" onClick={() => void logout()}>Sign out</button>
+        </div>
+      </Card>
+    );
   return (
     <Card title="Sign in to Tabbit">
       <p className="mb-4 text-sm opacity-70">{what}</p>

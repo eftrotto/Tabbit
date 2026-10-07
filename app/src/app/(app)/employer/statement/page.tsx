@@ -5,6 +5,7 @@ import { StatementView } from "@/components/statement-view";
 import { friendlyError } from "@/lib/errors";
 import { useDirectory } from "@/lib/directory";
 import { useLoad, useTabbit } from "@/lib/tabbit";
+import { Loading } from "@/components/loading";
 
 export default function EmployerStatementPage() {
   const { client, actor, isMock, isDemoPersona } = useTabbit("employer");
@@ -19,7 +20,7 @@ export default function EmployerStatementPage() {
       ) : employer.error ? (
         <ErrorText>{friendlyError(employer.error)}</ErrorText>
       ) : employer.data === undefined ? (
-        <p className="text-sm opacity-60">Loading…</p>
+        <Loading message="Loading your company…" />
       ) : employer.data === null ? (
         <ErrorText>This wallet has no company on Tabbit.</ErrorText>
       ) : (

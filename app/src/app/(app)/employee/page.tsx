@@ -9,6 +9,7 @@ import { InstallApp } from "./install";
 import { explorerAddressUrl, explorerTxUrl, useLoad, useTabbit } from "@/lib/tabbit";
 import { availableToday, CategoryBadge, CopyButton, EmployeeSignIn, fmtTime, NotLinked } from "./shared";
 import { DemoOffer, DemoRefill, useDemo } from "./demo";
+import { Loading } from "@/components/loading";
 
 export default function EmployeePage() {
   const { client, actor, isMock, isDemoPersona } = useTabbit("employee");
@@ -30,7 +31,7 @@ export default function EmployeePage() {
   const banner = <DemoBanner isMock={isMock} isDemoPersona={isDemoPersona} persona="João (employee)" />;
   if (!actor) return <div className="mx-auto max-w-md">{banner}<EmployeeSignIn what="Sign in with email or Google to see your meal benefit. New here? You get a demo benefit to try it." walletWhat="Connect the wallet your employer registered to see your meal benefit." /></div>;
   if (error) return <div className="mx-auto max-w-md">{banner}<ErrorText>{friendlyError(error)}</ErrorText></div>;
-  if (loading || !data) return <div className="mx-auto max-w-md">{banner}<p className="opacity-60">Loading your benefit…</p></div>;
+  if (loading || !data) return <div className="mx-auto max-w-md">{banner}<Loading message="Loading your benefit…" /></div>;
 
   const { employee: e, merchants, payments } = data;
   if (!e)

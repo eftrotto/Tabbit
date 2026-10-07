@@ -11,6 +11,7 @@ import { friendlyError } from "@/lib/errors";
 import { explorerTxUrl, useLoad, useTabbit, type TabbitContext } from "@/lib/tabbit";
 import { availableToday, CategoryBadge, EmployeeSignIn, fmtTime, NotLinked } from "../employee/shared";
 import { DemoOffer, useDemo } from "../employee/demo";
+import { Loading } from "@/components/loading";
 
 // Scanner só no cliente (usa câmera).
 const Scanner = dynamic(() => import("@yudiel/react-qr-scanner").then((m) => m.Scanner), { ssr: false });
@@ -25,7 +26,7 @@ const isKey = (s: string | null) => {
 
 export default function PayPage() {
   return (
-    <Suspense fallback={<p className="opacity-60">Loading…</p>}>
+    <Suspense fallback={<Loading />}>
       <PayRouter />
     </Suspense>
   );
@@ -120,7 +121,7 @@ function PayFlow({ tabbit, merchant, initialAmount }: { tabbit: TabbitContext; m
   const [receipt, setReceipt] = useState<{ sig: string; ts: number } | null>(null);
 
   if (error) return <ErrorText>{friendlyError(error)}</ErrorText>;
-  if (loading && !data) return <p className="opacity-60">Loading…</p>;
+  if (loading && !data) return <Loading />;
   const m: MerchantAccount | null | undefined = data?.m;
   const e = data?.e;
 

@@ -9,10 +9,11 @@ import { QRCodeSVG } from "qrcode.react";
 import { TabbitMark, Wordmark } from "@/components/brand";
 import { ErrorText } from "@/components/ui";
 import { useLoad, useTabbit } from "@/lib/tabbit";
+import { Loading } from "@/components/loading";
 
 export default function PosterPage() {
   return (
-    <Suspense fallback={<p className="opacity-60">Loading…</p>}>
+    <Suspense fallback={<Loading />}>
       <Poster />
     </Suspense>
   );
@@ -34,7 +35,7 @@ function Poster() {
 
   if (!wallet) return <ErrorText>Open this page from the Restaurant screen.</ErrorText>;
   if (error) return <ErrorText>Could not load the restaurant.</ErrorText>;
-  if (loading) return <p className="opacity-60">Loading…</p>;
+  if (loading) return <Loading />;
   if (!merchant) return <ErrorText>This wallet is not a registered restaurant.</ErrorText>;
 
   const url = `${origin}/pay?merchant=${wallet.toBase58()}`;

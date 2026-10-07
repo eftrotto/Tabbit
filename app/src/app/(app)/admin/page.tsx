@@ -11,6 +11,7 @@ import { friendlyError } from "@/lib/errors";
 import { explorerAddressUrl, useLoad, useTabbit } from "@/lib/tabbit";
 import { TxStatus, useTx } from "../employer/tx";
 import { CategoryBadge, ConnectCard, CopyButton } from "../employee/shared";
+import { Loading } from "@/components/loading";
 
 const CATEGORIES: { value: Category; label: string }[] = [
   { value: "restaurant", label: "Restaurant" },
@@ -30,7 +31,7 @@ export default function AdminPage() {
   const banner = <DemoBanner isMock={isMock} isDemoPersona={isDemoPersona} persona="Tabbit (platform)" />;
   if (!actor) return <div className="mx-auto max-w-2xl">{banner}<ConnectCard what="Connect the Tabbit platform wallet to manage the network." /></div>;
   if (data.error) return <div>{banner}<ErrorText>{friendlyError(data.error)}</ErrorText></div>;
-  if (!data.data) return <div>{banner}<p className="opacity-60">Loading…</p></div>;
+  if (!data.data) return <div>{banner}<Loading message="Loading the network…" /></div>;
 
   const { config, employers, merchants } = data.data;
   if (!config.authority.equals(actor))

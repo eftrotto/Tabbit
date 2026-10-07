@@ -11,6 +11,7 @@ import { useDirectory } from "@/lib/directory";
 import { CopyButton } from "../employee/shared";
 import { TxStatus, useTx } from "./tx";
 import { Vault } from "./vault";
+import { Loading } from "@/components/loading";
 
 const TIMEZONES = [
   { label: "Brasília (UTC-3)", min: -180 },
@@ -101,7 +102,7 @@ function Dashboard({ client, employer, isMock, reloadEmployer }: {
 
       <Card title={<span className="flex items-baseline justify-between gap-3">Recent payments<Link href="/employer/statement" className="text-sm font-semibold underline">Monthly statement</Link></span>}>
         {payments.error ? <ErrorText>{friendlyError(payments.error)}</ErrorText>
-          : !payments.data ? <p className="text-sm opacity-60">Loading…</p>
+          : !payments.data ? <Loading variant="inline" message="Loading payments…" />
           : payments.data.length === 0 ? <p className="text-sm opacity-70">No payments yet. They show up here the moment a worker pays a restaurant.</p>
           : (
             <ul className="divide-y divide-ink/10 text-sm">
@@ -137,7 +138,7 @@ export default function EmployerPage() {
       ) : employer.error ? (
         <ErrorText>{friendlyError(employer.error)}</ErrorText>
       ) : employer.data === undefined ? (
-        <p className="text-sm opacity-60">Loading…</p>
+        <Loading message="Loading your company…" />
       ) : employer.data === null ? (
         <RegisterForm client={client} isMock={isMock} onDone={employer.reload} />
       ) : (
